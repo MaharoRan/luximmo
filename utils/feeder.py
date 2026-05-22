@@ -4,11 +4,7 @@ import shutil
 # Mapping of indicators to their respective files
 INDICATOR_FILES = {
     "Indicateur_0": [
-        "ValeursFoncieres-2021.csv",
-        "ValeursFoncieres-2022.csv",
-        "ValeursFoncieres-2023.csv",
-        "ValeursFoncieres-2024.csv",
-        "ValeursFoncieres-2025.csv"
+        "dvf.csv",
     ],
     "Indicateur_1": [
         "ilots-de-fraicheur-espaces-verts-frais.parquet",
