@@ -4,3 +4,4 @@ Indicateur_*/raw/
 Indicateur_*/silver/
 Indicateur_*/gold/
 .env
+__pycache__/
