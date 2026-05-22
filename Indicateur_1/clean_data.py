@@ -16,6 +16,15 @@ def clean_columns(df):
         cleaned[c] = re.sub(r"[ ,;{}()\n\t=\-]", "_", c)
     return df.rename(columns=cleaned)
 
+def object_to_string(val):
+    if type(val) in (float, int) and pd.isna(val):
+        return None
+    if val is None:
+        return None
+    if isinstance(val, bytes):
+        return val.hex()
+    return str(val)
+
 def fetch_api(url, output_name):
     print(f"Fetching from {url}...")
     try:
@@ -25,12 +34,14 @@ def fetch_api(url, output_name):
             if "results" in data:
                 df = pd.DataFrame(data["results"])
                 df = clean_columns(df)
-            for c in df.columns:
-                if df[c].dtype == 'object':
-                    df[c] = df[c].astype(str)
+                for c in df.columns:
+                    if df[c].dtype == 'object':
+                        df[c] = df[c].apply(object_to_string)
                 # gdf = gpd.GeoDataFrame(df)
                 df.to_parquet(f"{SILVER_BASE}/{output_name}.parquet", engine="pyarrow", compression="snappy")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Fetch error: {e}")
 
 def process_parquets():
@@ -42,9 +53,11 @@ def process_parquets():
             df = clean_columns(df)
             for c in df.columns:
                 if df[c].dtype == 'object':
-                    df[c] = df[c].astype(str)
+                    df[c] = df[c].apply(object_to_string)
             df.to_parquet(f"{SILVER_BASE}/{ds}", engine="pyarrow", compression="snappy")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(e)
 
 if __name__ == "__main__":
