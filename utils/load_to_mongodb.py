@@ -125,7 +125,7 @@ if __name__ == "__main__":
     mongo_user, mongo_password = _get_mongo_credentials()
 
     load_to_mongodb(
-        "geo/iris.parquet",
+        "../geo/iris.parquet",
         _build_mongo_uri(
             "cluster0.3bidwmj.mongodb.net",
             mongo_user,
