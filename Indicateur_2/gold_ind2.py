@@ -211,7 +211,7 @@ def _load_association_scores() -> pd.DataFrame:
     return grouped
 
 
-def _load_film_scores(iris: pd.DataFrame) -> pd.DataFrame:
+def _load_film_scores() -> pd.DataFrame:
     df = pd.read_parquet(SILVER_DIR / "lieux-de-tournage-a-paris.parquet")
     df = df.copy()
     df["arrondissement"] = df["ardt_lieu"].apply(_extract_paris_arrondissement)
@@ -230,14 +230,6 @@ def _load_tourism_scores(iris: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-def _load_voirie_proxy(iris: pd.DataFrame) -> pd.DataFrame:
-    df = pd.read_parquet(SILVER_DIR / "plan de voirie.parquet")
-    df = _attach_arrondissement_from_points(df, "longitude", "latitude", iris)
-    grouped = df.groupby("arrondissement", as_index=False).agg(voirie_segments=("OBJECTID", "count"))
-    grouped["voirie_raw"] = grouped["voirie_segments"]
-    return grouped
-
-
 def build_gold_score() -> pd.DataFrame:
     iris = _load_paris_iris()
 
@@ -246,9 +238,8 @@ def build_gold_score() -> pd.DataFrame:
     green_space = _load_green_space_scores()
     islands = _load_freshness_islands_scores()
     associations = _load_association_scores()
-    films = _load_film_scores(iris)
+    films = _load_film_scores()
     tourism = _load_tourism_scores(iris)
-    voirie = _load_voirie_proxy(iris)
 
     score = pd.DataFrame({"arrondissement": list(range(1, 21))})
     score = score.merge(activities, on="arrondissement", how="left")
@@ -258,7 +249,6 @@ def build_gold_score() -> pd.DataFrame:
     score = score.merge(associations, on="arrondissement", how="left")
     score = score.merge(films, on="arrondissement", how="left")
     score = score.merge(tourism, on="arrondissement", how="left")
-    score = score.merge(voirie, on="arrondissement", how="left")
 
     numeric_columns = [
         "activities_count",
@@ -276,8 +266,6 @@ def build_gold_score() -> pd.DataFrame:
         "film_raw",
         "tourism_zones",
         "tourism_raw",
-        "voirie_segments",
-        "voirie_raw",
     ]
     for column in numeric_columns:
         if column not in score.columns:
@@ -291,7 +279,6 @@ def build_gold_score() -> pd.DataFrame:
     score["associations_norm"] = _normalize_weights(score["associations_raw"])
     score["film_norm"] = _normalize_weights(score["film_raw"])
     score["tourism_norm"] = _normalize_weights(score["tourism_raw"])
-    score["voirie_norm"] = _normalize_weights(score["voirie_raw"])
 
     score["score_interet_culturel_loisir"] = (
         100
@@ -322,7 +309,6 @@ def build_gold_score() -> pd.DataFrame:
             "associations_count",
             "film_locations",
             "tourism_zones",
-            "voirie_segments",
             "activities_norm",
             "voirie_activity_norm",
             "trees_norm",
@@ -330,7 +316,6 @@ def build_gold_score() -> pd.DataFrame:
             "associations_norm",
             "film_norm",
             "tourism_norm",
-            "voirie_norm",
         ]
     ]
 

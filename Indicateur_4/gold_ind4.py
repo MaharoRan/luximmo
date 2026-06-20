@@ -15,6 +15,7 @@ SILVER_DIR = REPO_ROOT / "Indicateur_4" / "silver"
 GOLD_DIR = REPO_ROOT / "Indicateur_4" / "gold"
 
 PARIS_ARRONDISSEMENT_RE = re.compile(r"Paris\s+(\d{1,2})e\s+Arrondissement", re.IGNORECASE)
+POSTAL_75_RE = re.compile(r"75(\d{3})")
 
 
 def _safe_numeric_series(series: pd.Series) -> pd.Series:
@@ -32,6 +33,12 @@ def _extract_paris_arrondissement(value) -> int | None:
     match = PARIS_ARRONDISSEMENT_RE.search(text)
     if match:
         arrondissement = int(match.group(1))
+        if 1 <= arrondissement <= 20:
+            return arrondissement
+
+    match = POSTAL_75_RE.search(text)
+    if match:
+        arrondissement = int(match.group(1)) % 100
         if 1 <= arrondissement <= 20:
             return arrondissement
 
@@ -101,21 +108,36 @@ def _normalize_weights(series: pd.Series) -> pd.Series:
 def _load_gare_scores(iris: pd.DataFrame) -> pd.DataFrame:
     df = pd.read_parquet(SILVER_DIR / "emplacement-des-gares-idf.parquet")
     df = _attach_arrondissement_from_points(df, "longitude", "latitude", iris)
-    if "capacity" in df.columns:
-        df["capacity"] = _safe_numeric_series(df["capacity"]).fillna(0)
-    else:
-        df["capacity"] = 0
 
     grouped = df.groupby("arrondissement", as_index=False).agg(
         gare_stations=("gares_id", "count"),
-        gare_capacity=("capacity", "sum"),
     )
-    grouped["gare_raw"] = grouped["gare_stations"] * 2 + grouped["gare_capacity"] / 40.0
+    grouped["gare_raw"] = grouped["gare_stations"]
     return grouped
 
 
 def _load_velib_scores(iris: pd.DataFrame) -> pd.DataFrame:
     df = pd.read_parquet(SILVER_DIR / "velib-emplacement-des-stations.parquet")
+    df = df.copy()
+    if "coordonnees_geo" in df.columns:
+        points = df["coordonnees_geo"].apply(lambda value: wkb.loads(value) if pd.notna(value) else None)
+        if points.notna().sum() == 0:
+            raise ValueError(
+                "Le parquet silver Vélib contient `coordonnees_geo` mais aucune géométrie exploitable."
+            )
+        df["longitude"] = points.apply(lambda geom: geom.x if geom is not None else None)
+        df["latitude"] = points.apply(lambda geom: geom.y if geom is not None else None)
+    elif {"longitude", "latitude"}.issubset(df.columns):
+        if df[["longitude", "latitude"]].notna().sum().sum() == 0:
+            raise ValueError(
+                "Le parquet silver Vélib contient `longitude`/`latitude` mais elles sont toutes vides."
+            )
+        pass
+    else:
+        raise ValueError(
+            "Le parquet silver Vélib ne contient ni coordonnees_geo ni colonnes longitude/latitude exploitables. "
+            "Il faut enrichir le silver avant de calculer le gold."
+        )
     df = _attach_arrondissement_from_points(df, "longitude", "latitude", iris)
     if "capacity" in df.columns:
         df["capacity"] = _safe_numeric_series(df["capacity"]).fillna(0)
@@ -194,7 +216,6 @@ def build_gold_score() -> pd.DataFrame:
 
     numeric_columns = [
         "gare_stations",
-        "gare_capacity",
         "gare_raw",
         "velib_stations",
         "velib_capacity",
@@ -233,7 +254,6 @@ def build_gold_score() -> pd.DataFrame:
             "arrondissement_libelle",
             "score_acces_transport",
             "gare_stations",
-            "gare_capacity",
             "velib_stations",
             "velib_capacity",
             "cycling_segments",

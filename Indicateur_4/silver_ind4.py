@@ -91,10 +91,11 @@ def clean_plan_de_voirie() -> None:
 def clean_velib_stations() -> None:
     df = pd.read_parquet(RAW_DIR / "velib-emplacement-des-stations.parquet")
     if "coordonnees_geo" in df.columns:
-        df[["latitude", "longitude"]] = df["coordonnees_geo"].apply(
-            lambda x: pd.Series({"latitude": x["lat"], "longitude": x["lon"]}) if isinstance(x, dict) else pd.Series([None, None])
+        df[["longitude", "latitude"]] = df["coordonnees_geo"].apply(
+            lambda x: pd.Series(_wkb_point_to_lon_lat(x))
         )
-    cleaned = _prepare_output(df, ["stationcode", "name", "capacity", "latitude", "longitude"])
+        df.rename(columns={"longitude": "longitude", "latitude": "latitude"}, inplace=True)
+    cleaned = _prepare_output(df, ["stationcode", "name", "capacity", "coordonnees_geo", "latitude", "longitude"])
     _write_parquet(cleaned, "velib-emplacement-des-stations.parquet")
 
 def main() -> None:

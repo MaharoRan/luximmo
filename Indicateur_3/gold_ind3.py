@@ -172,14 +172,6 @@ def _load_bibliotheques_scores(iris: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-def _load_plan_proxy(iris: pd.DataFrame) -> pd.DataFrame:
-    df = pd.read_parquet(SILVER_DIR / "plan de voirie.parquet")
-    df = _attach_arrondissement_from_points(df, "longitude", "latitude", iris)
-    grouped = df.groupby("arrondissement", as_index=False).agg(voirie_segments=("OBJECTID", "count"))
-    grouped["voirie_raw"] = grouped["voirie_segments"]
-    return grouped
-
-
 def build_gold_score() -> pd.DataFrame:
     iris = _load_paris_iris()
 
@@ -189,7 +181,6 @@ def build_gold_score() -> pd.DataFrame:
     police = _load_police_scores()
     postes = _load_postes_scores(iris)
     biblio = _load_bibliotheques_scores(iris)
-    voirie = _load_plan_proxy(iris)
 
     score = pd.DataFrame({"arrondissement": list(range(1, 21))})
     score = score.merge(hopitaux, on="arrondissement", how="left")
@@ -198,7 +189,6 @@ def build_gold_score() -> pd.DataFrame:
     score = score.merge(police, on="arrondissement", how="left")
     score = score.merge(postes, on="arrondissement", how="left")
     score = score.merge(biblio, on="arrondissement", how="left")
-    score = score.merge(voirie, on="arrondissement", how="left")
 
     numeric_columns = [
         "hopitaux_count",
@@ -213,8 +203,6 @@ def build_gold_score() -> pd.DataFrame:
         "postes_raw",
         "biblio_count",
         "biblio_raw",
-        "voirie_segments",
-        "voirie_raw",
     ]
     for column in numeric_columns:
         if column not in score.columns:
@@ -228,7 +216,6 @@ def build_gold_score() -> pd.DataFrame:
     score["police_norm"] = _normalize_weights(score["police_raw"]) 
     score["postes_norm"] = _normalize_weights(score["postes_raw"]) 
     score["biblio_norm"] = _normalize_weights(score["biblio_raw"]) 
-    score["voirie_norm"] = _normalize_weights(score["voirie_raw"]) 
 
     # weights: hopitaux > ecoles > pharmacies > police > postes > biblio
     score["score_acces_services_publiques"] = (
@@ -257,14 +244,12 @@ def build_gold_score() -> pd.DataFrame:
             "police_count",
             "postes_count",
             "biblio_count",
-            "voirie_segments",
             "hopitaux_norm",
             "ecoles_norm",
             "pharmacies_norm",
             "police_norm",
             "postes_norm",
             "biblio_norm",
-            "voirie_norm",
         ]
     ]
 
