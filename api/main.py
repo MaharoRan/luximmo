@@ -17,6 +17,62 @@ app.add_middleware(
 )
 
 
+def load_paris_iris():
+    iris_path = ROOT / "geo" / "iris.parquet"
+    iris = pd.read_parquet(iris_path)
+
+    iris = iris[
+        iris["nom_com"].astype(str).str.contains("Paris", case=False, na=False)
+    ].copy()
+
+    iris["arrondissement"] = (
+        iris["nom_com"]
+        .astype(str)
+        .str.extract(r"Paris\s+(\d{1,2})e\s+Arrondissement", expand=False)
+    )
+
+    iris = iris.dropna(subset=["arrondissement"]).copy()
+    iris["arrondissement"] = iris["arrondissement"].astype(int)
+
+    return iris[["code_iris", "nom_iris", "nom_com", "arrondissement"]]
+
+
+def load_gold_scores():
+    ind1 = pd.read_parquet(
+        ROOT / "Indicateur_1" / "gold" / "score_qualite_de_vie.parquet"
+    )[["arrondissement", "score_qualite_environnement"]]
+
+    ind2 = pd.read_parquet(
+        ROOT / "Indicateur_2" / "gold" / "score_interet_culturel_loisir.parquet"
+    )[["arrondissement", "score_interet_culturel_loisir"]]
+
+    ind3 = pd.read_parquet(
+        ROOT / "Indicateur_3" / "gold" / "score_acces_services_publiques.parquet"
+    )[["arrondissement", "score_acces_services_publiques"]]
+
+    ind4 = pd.read_parquet(
+        ROOT / "Indicateur_4" / "gold" / "score_acces_transport.parquet"
+    )[["arrondissement", "score_acces_transport"]]
+
+    scores = ind1.merge(ind2, on="arrondissement", how="outer")
+    scores = scores.merge(ind3, on="arrondissement", how="outer")
+    scores = scores.merge(ind4, on="arrondissement", how="outer")
+
+    scores = scores.rename(
+        columns={
+            "score_qualite_environnement": "quality",
+            "score_interet_culturel_loisir": "culture",
+            "score_acces_services_publiques": "services",
+            "score_acces_transport": "transport",
+        }
+    )
+
+    return scores
+
+@app.get("/")
+def root():
+    return {"message": "LuxImmo API is running"}
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
@@ -24,12 +80,24 @@ def health():
 
 @app.get("/api/scores")
 def get_scores():
-    # temporaire : fallback JSON du front
-    # plus tard : remplacer ce chemin par Indicateur_X/gold/...
-    data_path = ROOT / "frontend" / "public" / "data" / "scores.json"
+    iris = load_paris_iris()
+    scores = load_gold_scores()
 
-    if not data_path.exists():
-        return []
+    result = iris.merge(scores, on="arrondissement", how="left")
 
-    df = pd.read_json(data_path)
-    return df.to_dict(orient="records")
+    result[["quality", "culture", "services", "transport"]] = result[
+        ["quality", "culture", "services", "transport"]
+    ].fillna(50)
+
+    return result[
+        [
+            "code_iris",
+            "nom_iris",
+            "nom_com",
+            "arrondissement",
+            "quality",
+            "culture",
+            "services",
+            "transport",
+        ]
+    ].to_dict(orient="records")

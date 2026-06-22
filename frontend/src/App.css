@@ -196,3 +196,21 @@ body,
   font-size: 18px;
   color: #1f6f78;
 }
+
+.global-score {
+  display: block;
+  font-size: 30px;
+  margin: 8px 0 14px;
+  color: #1f6f78;
+}
+
+.score-list p {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.score-list b {
+  color: #1f6f78;
+}

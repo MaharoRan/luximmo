@@ -84,16 +84,15 @@ function MapView({ selectedIndicator, setSelectedZone }) {
         minzoom: 11.5,
         paint: {
           "fill-color": [
-            "interpolate",
-            ["linear"],
-            ["get", "score"],
-            0,
-            "#d9eee8",
-            50,
-            "#76b7ae",
-            100,
-            "#1f6f78",
-          ],
+  "interpolate",
+  ["linear"],
+  ["get", "score"],
+  0, "#f4f4f4",
+  25, "#b7e4c7",
+  50, "#74c69d",
+  75, "#2a9d8f",
+  100, "#264653"
+],
           "fill-opacity": [
             "case",
             ["boolean", ["feature-state", "hover"], false],
