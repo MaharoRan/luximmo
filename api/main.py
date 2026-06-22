@@ -10,7 +10,10 @@ app = FastAPI(title="LuxImmo API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,9 +72,32 @@ def load_gold_scores():
 
     return scores
 
+
+def load_prices():
+    prices_path = ROOT / "Indicateur_0" / "gold" / "prix_m2_arrondissement_year.parquet"
+    prices = pd.read_parquet(prices_path)
+
+    latest_year = int(prices["year"].max())
+
+    latest_prices = prices[prices["year"] == latest_year].copy()
+
+    return latest_prices[
+        [
+            "arrondissement",
+            "year",
+            "prix_m2_median",
+            "prix_m2_mean",
+            "valeur_fonciere_median",
+            "surface_median",
+            "transactions_count",
+        ]
+    ]
+
+
 @app.get("/")
 def root():
     return {"message": "LuxImmo API is running"}
+
 
 @app.get("/api/health")
 def health():
@@ -82,12 +108,24 @@ def health():
 def get_scores():
     iris = load_paris_iris()
     scores = load_gold_scores()
+    prices = load_prices()
 
     result = iris.merge(scores, on="arrondissement", how="left")
+    result = result.merge(prices, on="arrondissement", how="left")
 
     result[["quality", "culture", "services", "transport"]] = result[
         ["quality", "culture", "services", "transport"]
     ].fillna(50)
+
+    price_columns = [
+        "prix_m2_median",
+        "prix_m2_mean",
+        "valeur_fonciere_median",
+        "surface_median",
+        "transactions_count",
+    ]
+
+    result[price_columns] = result[price_columns].fillna(0)
 
     return result[
         [
@@ -99,5 +137,11 @@ def get_scores():
             "culture",
             "services",
             "transport",
+            "year",
+            "prix_m2_median",
+            "prix_m2_mean",
+            "valeur_fonciere_median",
+            "surface_median",
+            "transactions_count",
         ]
     ].to_dict(orient="records")

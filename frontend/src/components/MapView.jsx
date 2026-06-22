@@ -9,7 +9,16 @@ const indicatorLabels = {
   culture: "Culture & loisirs",
   services: "Services publics",
   transport: "Transports",
+  price: "Prix immobilier",
 };
+
+function formatValue(value, indicator) {
+  if (indicator === "price") {
+    return `${Number(value).toLocaleString("fr-FR")} €/m²`;
+  }
+
+  return `${value} / 100`;
+}
 
 function extendBounds(bounds, coordinates) {
   if (typeof coordinates[0] === "number") {
@@ -18,6 +27,32 @@ function extendBounds(bounds, coordinates) {
   }
 
   coordinates.forEach((coord) => extendBounds(bounds, coord));
+}
+
+function getColorScale(indicator) {
+  if (indicator === "price") {
+    return [
+      "interpolate",
+      ["linear"],
+      ["get", "score"],
+      7000, "#f4f4f4",
+      9000, "#b7e4c7",
+      11000, "#74c69d",
+      13000, "#2a9d8f",
+      16000, "#264653",
+    ];
+  }
+
+  return [
+    "interpolate",
+    ["linear"],
+    ["get", "score"],
+    0, "#f4f4f4",
+    25, "#b7e4c7",
+    50, "#74c69d",
+    75, "#2a9d8f",
+    100, "#264653",
+  ];
 }
 
 function MapView({
@@ -34,6 +69,7 @@ function MapView({
 
   const compareModeRef = useRef(compareMode);
   const compareTargetRef = useRef(compareTarget);
+  const selectedIndicatorRef = useRef(selectedIndicator);
 
   useEffect(() => {
     compareModeRef.current = compareMode;
@@ -42,6 +78,10 @@ function MapView({
   useEffect(() => {
     compareTargetRef.current = compareTarget;
   }, [compareTarget]);
+
+  useEffect(() => {
+    selectedIndicatorRef.current = selectedIndicator;
+  }, [selectedIndicator]);
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -83,7 +123,7 @@ function MapView({
           score: getScoreFromData(
             scoresRef.current,
             feature.properties.code_iris,
-            selectedIndicator
+            selectedIndicatorRef.current
           ),
         },
       }));
@@ -100,16 +140,7 @@ function MapView({
         source: "iris",
         minzoom: 11.5,
         paint: {
-          "fill-color": [
-            "interpolate",
-            ["linear"],
-            ["get", "score"],
-            0, "#f4f4f4",
-            25, "#b7e4c7",
-            50, "#74c69d",
-            75, "#2a9d8f",
-            100, "#264653",
-          ],
+          "fill-color": getColorScale(selectedIndicatorRef.current),
           "fill-opacity": [
             "case",
             ["boolean", ["feature-state", "hover"], false],
@@ -192,10 +223,12 @@ function MapView({
 
         map.getCanvas().style.cursor = "pointer";
 
+        const indicator = selectedIndicatorRef.current;
+
         const score = getScoreFromData(
           scoresRef.current,
           properties.code_iris,
-          selectedIndicator
+          indicator
         );
 
         popupRef.current
@@ -203,8 +236,8 @@ function MapView({
           .setHTML(`
             <div class="map-tooltip">
               <strong>${properties.nom_iris || "Zone IRIS"}</strong>
-              <span>${indicatorLabels[selectedIndicator]}</span>
-              <b>${score} / 100</b>
+              <span>${indicatorLabels[indicator]}</span>
+              <b>${formatValue(score, indicator)}</b>
             </div>
           `)
           .addTo(map);
@@ -247,6 +280,8 @@ function MapView({
     const map = mapRef.current;
     if (!map || !map.getSource("iris")) return;
 
+    selectedIndicatorRef.current = selectedIndicator;
+
     fetch("/data/iris_paris.geojson")
       .then((res) => res.json())
       .then((geojson) => {
@@ -263,6 +298,7 @@ function MapView({
         }));
 
         map.getSource("iris").setData(geojson);
+        map.setPaintProperty("iris-fill", "fill-color", getColorScale(selectedIndicator));
       });
   }, [selectedIndicator]);
 

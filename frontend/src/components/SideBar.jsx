@@ -6,7 +6,18 @@ const indicators = [
   { id: "culture", label: "Culture & loisirs" },
   { id: "services", label: "Services publics" },
   { id: "transport", label: "Transports" },
+  { id: "price", label: "Prix immobilier" },
 ];
+
+function formatEuro(value) {
+  if (!value) return "—";
+  return `${Number(value).toLocaleString("fr-FR")} €`;
+}
+
+function getZoneData(scoresByIris, zone) {
+  if (!zone) return null;
+  return scoresByIris?.[zone.code_iris] ?? null;
+}
 
 function getGlobalScore(scoresByIris, zone) {
   if (!zone) return null;
@@ -37,6 +48,38 @@ function ScoreRows({ scoresByIris, zone }) {
   );
 }
 
+function PriceBlock({ scoresByIris, zone }) {
+  const zoneData = getZoneData(scoresByIris, zone);
+
+  if (!zoneData) return null;
+
+  return (
+    <div className="price-block">
+      <h4>Marché immobilier</h4>
+
+      <p>
+        Prix médian
+        <b>{formatEuro(zoneData.prix_m2_median)} / m²</b>
+      </p>
+
+      <p>
+        Prix moyen
+        <b>{formatEuro(zoneData.prix_m2_mean)} / m²</b>
+      </p>
+
+      <p>
+        Transactions
+        <b>{zoneData.transactions_count || "—"}</b>
+      </p>
+
+      <p>
+        Année
+        <b>{zoneData.year || "—"}</b>
+      </p>
+    </div>
+  );
+}
+
 function Sidebar({
   selectedIndicator,
   setSelectedIndicator,
@@ -60,6 +103,9 @@ function Sidebar({
   const score = selectedZone
     ? getScoreFromData(scoresByIris, selectedZone.code_iris, selectedIndicator)
     : null;
+
+  const selectedZoneData = getZoneData(scoresByIris, selectedZone);
+  const compareZoneData = getZoneData(scoresByIris, compareZone);
 
   return (
     <aside className="sidebar">
@@ -118,15 +164,28 @@ function Sidebar({
       </button>
 
       <div className="kpi-card">
-        <strong>{score ? `${score} / 100` : "—"}</strong>
-        <span>{selectedZone ? currentIndicator.label : "Score zone"}</span>
-      </div>
+  <strong>
+    {score
+      ? selectedIndicator === "price"
+        ? `${Number(score).toLocaleString("fr-FR")} €/m²`
+        : `${score} / 100`
+      : "—"}
+  </strong>
+
+  <span>
+    {selectedZone ? currentIndicator.label : "Score zone"}
+  </span>
+</div>
 
       {selectedZone ? (
         <div className="zone-card">
           <h3>{selectedZone.nom_iris}</h3>
           <p>Commune : {selectedZone.nom_com}</p>
           <p>Code IRIS : {selectedZone.code_iris}</p>
+
+          <hr />
+
+          <PriceBlock scoresByIris={scoresByIris} zone={selectedZone} />
 
           <hr />
 
@@ -172,6 +231,18 @@ function Sidebar({
                 <span>Global</span>
                 <b>{getGlobalScore(scoresByIris, selectedZone)}</b>
                 <b>{getGlobalScore(scoresByIris, compareZone)}</b>
+              </div>
+
+              <div className="compare-row">
+                <span>Prix médian €/m²</span>
+                <b>{formatEuro(selectedZoneData?.prix_m2_median)}</b>
+                <b>{formatEuro(compareZoneData?.prix_m2_median)}</b>
+              </div>
+
+              <div className="compare-row">
+                <span>Transactions</span>
+                <b>{selectedZoneData?.transactions_count || "—"}</b>
+                <b>{compareZoneData?.transactions_count || "—"}</b>
               </div>
             </div>
           )}

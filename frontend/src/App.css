@@ -310,3 +310,22 @@ body,
   font-size: 18px;
   color: #1f6f78;
 }
+
+.price-block {
+  margin: 12px 0;
+}
+
+.price-block h4 {
+  margin: 0 0 10px;
+}
+
+.price-block p {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.price-block b {
+  color: #1f6f78;
+}

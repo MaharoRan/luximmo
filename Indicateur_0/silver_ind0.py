@@ -6,9 +6,13 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_FILE = PROJECT_ROOT / "Indicateur_0" / "raw" / "dvf.csv"
 SILVER_DIR = PROJECT_ROOT / "Indicateur_0" / "silver"
+
 SELECTED_COLUMNS = [
     "date_mutation",
     "valeur_fonciere",
+    "surface_reelle_bati",
+    "type_local",
+    "nombre_pieces_principales",
     "code_postal",
     "longitude",
     "latitude",
@@ -26,16 +30,34 @@ def _load_dvf(source_file: Path) -> pd.DataFrame:
         raise ValueError(f"Colonnes manquantes dans dvf.csv: {missing_columns}")
 
     df = df.loc[:, SELECTED_COLUMNS].copy()
-    df = df.dropna(subset=SELECTED_COLUMNS)
     df["code_postal"] = df["code_postal"].astype("string").str.zfill(5)
-    df = df[df["code_postal"].str.startswith("75")]
+
+    df = df[df["code_postal"].str.startswith("75", na=False)].copy()
+
+    df["valeur_fonciere"] = pd.to_numeric(df["valeur_fonciere"], errors="coerce")
+    df["surface_reelle_bati"] = pd.to_numeric(df["surface_reelle_bati"], errors="coerce")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+
+    df = df.dropna(
+        subset=[
+            "date_mutation",
+            "valeur_fonciere",
+            "surface_reelle_bati",
+            "code_postal",
+            "longitude",
+            "latitude",
+        ]
+    )
+
+    df = df[df["surface_reelle_bati"] > 0].copy()
+    df = df[df["valeur_fonciere"] > 0].copy()
 
     return df
 
 
 def _arrondissement_from_code_postal(code_postal: str) -> str:
-    arrondissement = code_postal[-2:]
-    return arrondissement
+    return code_postal[-2:]
 
 
 def _export_parquet_by_arrondissement(df: pd.DataFrame, output_dir: Path) -> None:
