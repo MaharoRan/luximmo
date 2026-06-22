@@ -8,7 +8,47 @@ const indicators = [
   { id: "transport", label: "Transports" },
 ];
 
-function Sidebar({ selectedIndicator, setSelectedIndicator, selectedZone }) {
+function getGlobalScore(scoresByIris, zone) {
+  if (!zone) return null;
+
+  const quality = getScoreFromData(scoresByIris, zone.code_iris, "quality");
+  const culture = getScoreFromData(scoresByIris, zone.code_iris, "culture");
+  const services = getScoreFromData(scoresByIris, zone.code_iris, "services");
+  const transport = getScoreFromData(scoresByIris, zone.code_iris, "transport");
+
+  return (
+    quality * 0.3 +
+    culture * 0.2 +
+    services * 0.25 +
+    transport * 0.25
+  ).toFixed(2);
+}
+
+function ScoreRows({ scoresByIris, zone }) {
+  if (!zone) return null;
+
+  return (
+    <div className="score-list">
+      <p>Qualité de vie <b>{getScoreFromData(scoresByIris, zone.code_iris, "quality")} / 100</b></p>
+      <p>Culture & loisirs <b>{getScoreFromData(scoresByIris, zone.code_iris, "culture")} / 100</b></p>
+      <p>Services publics <b>{getScoreFromData(scoresByIris, zone.code_iris, "services")} / 100</b></p>
+      <p>Transports <b>{getScoreFromData(scoresByIris, zone.code_iris, "transport")} / 100</b></p>
+    </div>
+  );
+}
+
+function Sidebar({
+  selectedIndicator,
+  setSelectedIndicator,
+  selectedZone,
+  compareZone,
+  compareMode,
+  setCompareMode,
+  compareTarget,
+  setCompareTarget,
+  setSelectedZone,
+  setCompareZone,
+}) {
   const [scoresByIris, setScoresByIris] = useState({});
 
   useEffect(() => {
@@ -20,16 +60,6 @@ function Sidebar({ selectedIndicator, setSelectedIndicator, selectedZone }) {
   const score = selectedZone
     ? getScoreFromData(scoresByIris, selectedZone.code_iris, selectedIndicator)
     : null;
-
-  const quality = selectedZone ? getScoreFromData(scoresByIris, selectedZone.code_iris, "quality") : null;
-  const culture = selectedZone ? getScoreFromData(scoresByIris, selectedZone.code_iris, "culture") : null;
-  const services = selectedZone ? getScoreFromData(scoresByIris, selectedZone.code_iris, "services") : null;
-  const transport = selectedZone ? getScoreFromData(scoresByIris, selectedZone.code_iris, "transport") : null;
-
-  const globalScore =
-    selectedZone
-      ? ((quality * 0.3) + (culture * 0.2) + (services * 0.25) + (transport * 0.25)).toFixed(2)
-      : null;
 
   return (
     <aside className="sidebar">
@@ -47,14 +77,45 @@ function Sidebar({ selectedIndicator, setSelectedIndicator, selectedZone }) {
             </option>
           ))}
         </select>
-
-        {/* <label>Année</label> 
-        <div className="year-row">
-          <span>2014</span>
-          <input type="range" min="2014" max="2023" defaultValue="2023" />
-          <span>2023</span>
-        </div>*/}
       </div>
+
+      <button
+        className={compareMode ? "compare-btn active" : "compare-btn"}
+        onClick={() => setCompareMode(!compareMode)}
+      >
+        {compareMode ? "Mode comparaison activé" : "Activer comparaison"}
+      </button>
+
+      {compareMode && (
+        <div className="compare-target">
+          <p>Sélection à modifier :</p>
+          <div className="target-buttons">
+            <button
+              className={compareTarget === "A" ? "active" : ""}
+              onClick={() => setCompareTarget("A")}
+            >
+              Zone A
+            </button>
+            <button
+              className={compareTarget === "B" ? "active" : ""}
+              onClick={() => setCompareTarget("B")}
+            >
+              Zone B
+            </button>
+          </div>
+          <small>Clique sur la carte pour choisir la zone sélectionnée.</small>
+        </div>
+      )}
+
+      <button
+        className="reset-btn"
+        onClick={() => {
+          setSelectedZone(null);
+          setCompareZone(null);
+        }}
+      >
+        Réinitialiser
+      </button>
 
       <div className="kpi-card">
         <strong>{score ? `${score} / 100` : "—"}</strong>
@@ -70,19 +131,50 @@ function Sidebar({ selectedIndicator, setSelectedIndicator, selectedZone }) {
           <hr />
 
           <h4>Score global LuxImmo</h4>
-          <strong className="global-score">{globalScore} / 100</strong>
+          <strong className="global-score">
+            {getGlobalScore(scoresByIris, selectedZone)} / 100
+          </strong>
 
-          <div className="score-list">
-            <p>Qualité de vie <b>{quality} / 100</b></p>
-            <p>Culture & loisirs <b>{culture} / 100</b></p>
-            <p>Services publics <b>{services} / 100</b></p>
-            <p>Transports <b>{transport} / 100</b></p>
-          </div>
+          <ScoreRows scoresByIris={scoresByIris} zone={selectedZone} />
         </div>
       ) : (
         <div className="zone-card">
           <h3>Aucune zone sélectionnée</h3>
           <p>Clique sur une zone IRIS de la carte.</p>
+        </div>
+      )}
+
+      {compareMode && (
+        <div className="compare-card">
+          <h3>Comparaison</h3>
+
+          <div className="compare-column">
+            <h4>Zone A</h4>
+            <p>{selectedZone ? selectedZone.nom_iris : "Non sélectionnée"}</p>
+          </div>
+
+          <div className="compare-column">
+            <h4>Zone B</h4>
+            <p>{compareZone ? compareZone.nom_iris : "Non sélectionnée"}</p>
+          </div>
+
+          {selectedZone && compareZone && (
+            <div className="compare-table">
+              {indicators.map((indicator) => (
+                <div className="compare-row" key={indicator.id}>
+                  <span>{indicator.label}</span>
+                  <b>{getScoreFromData(scoresByIris, selectedZone.code_iris, indicator.id)}</b>
+                  <b>{getScoreFromData(scoresByIris, compareZone.code_iris, indicator.id)}</b>
+                </div>
+              ))}
+
+              <div className="compare-row global">
+                <span>Global</span>
+                <b>{getGlobalScore(scoresByIris, selectedZone)}</b>
+                <b>{getGlobalScore(scoresByIris, compareZone)}</b>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </aside>

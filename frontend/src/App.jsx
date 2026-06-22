@@ -6,6 +6,9 @@ import "./App.css";
 function App() {
   const [selectedIndicator, setSelectedIndicator] = useState("quality");
   const [selectedZone, setSelectedZone] = useState(null);
+  const [compareZone, setCompareZone] = useState(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareTarget, setCompareTarget] = useState("A");
 
   return (
     <div className="app">
@@ -13,11 +16,21 @@ function App() {
         selectedIndicator={selectedIndicator}
         setSelectedIndicator={setSelectedIndicator}
         selectedZone={selectedZone}
+        compareZone={compareZone}
+        compareMode={compareMode}
+        setCompareMode={setCompareMode}
+        compareTarget={compareTarget}
+        setCompareTarget={setCompareTarget}
+        setSelectedZone={setSelectedZone}
+        setCompareZone={setCompareZone}
       />
 
       <MapView
         selectedIndicator={selectedIndicator}
+        compareMode={compareMode}
+        compareTarget={compareTarget}
         setSelectedZone={setSelectedZone}
+        setCompareZone={setCompareZone}
       />
     </div>
   );

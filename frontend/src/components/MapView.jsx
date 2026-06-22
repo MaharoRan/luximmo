@@ -20,11 +20,28 @@ function extendBounds(bounds, coordinates) {
   coordinates.forEach((coord) => extendBounds(bounds, coord));
 }
 
-function MapView({ selectedIndicator, setSelectedZone }) {
+function MapView({
+  selectedIndicator,
+  compareMode,
+  compareTarget,
+  setSelectedZone,
+  setCompareZone,
+}) {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
   const scoresRef = useRef({});
   const popupRef = useRef(null);
+
+  const compareModeRef = useRef(compareMode);
+  const compareTargetRef = useRef(compareTarget);
+
+  useEffect(() => {
+    compareModeRef.current = compareMode;
+  }, [compareMode]);
+
+  useEffect(() => {
+    compareTargetRef.current = compareTarget;
+  }, [compareTarget]);
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -84,15 +101,15 @@ function MapView({ selectedIndicator, setSelectedZone }) {
         minzoom: 11.5,
         paint: {
           "fill-color": [
-  "interpolate",
-  ["linear"],
-  ["get", "score"],
-  0, "#f4f4f4",
-  25, "#b7e4c7",
-  50, "#74c69d",
-  75, "#2a9d8f",
-  100, "#264653"
-],
+            "interpolate",
+            ["linear"],
+            ["get", "score"],
+            0, "#f4f4f4",
+            25, "#b7e4c7",
+            50, "#74c69d",
+            75, "#2a9d8f",
+            100, "#264653",
+          ],
           "fill-opacity": [
             "case",
             ["boolean", ["feature-state", "hover"], false],
@@ -114,8 +131,6 @@ function MapView({ selectedIndicator, setSelectedZone }) {
         },
       });
 
-      // IMPORTANT : contour des arrondissements ajouté APRÈS les IRIS
-      // comme ça il reste visible par-dessus les petits quartiers
       map.addLayer({
         id: "arr-outline",
         type: "line",
@@ -126,23 +141,12 @@ function MapView({ selectedIndicator, setSelectedZone }) {
             "interpolate",
             ["linear"],
             ["zoom"],
-            10,
-            1.8,
-            12,
-            2.6,
-            14,
-            3.6,
+            10, 1.8,
+            12, 2.6,
+            14, 3.6,
           ],
           "line-opacity": 0.95,
         },
-      });
-
-      map.on("mouseenter", "arr-fill", () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-
-      map.on("mouseleave", "arr-fill", () => {
-        map.getCanvas().style.cursor = "";
       });
 
       map.on("click", "arr-fill", (e) => {
@@ -150,19 +154,6 @@ function MapView({ selectedIndicator, setSelectedZone }) {
         const bounds = new maplibregl.LngLatBounds();
 
         extendBounds(bounds, feature.geometry.coordinates);
-
-        setSelectedZone({
-          nom_iris:
-            feature.properties.l_ar ||
-            feature.properties.nom ||
-            "Arrondissement",
-          code_iris:
-            feature.properties.c_arinsee ||
-            feature.properties.c_ar ||
-            "—",
-          nom_com: "Paris",
-          typ_iris: "Arrondissement",
-        });
 
         map.fitBounds(bounds, {
           padding: 90,
@@ -233,12 +224,24 @@ function MapView({ selectedIndicator, setSelectedZone }) {
       });
 
       map.on("click", "iris-fill", (e) => {
-        setSelectedZone(e.features[0].properties);
+        const clickedZone = e.features[0].properties;
+
+        if (!compareModeRef.current) {
+          setSelectedZone(clickedZone);
+          setCompareZone(null);
+          return;
+        }
+
+        if (compareTargetRef.current === "A") {
+          setSelectedZone(clickedZone);
+        } else {
+          setCompareZone(clickedZone);
+        }
       });
     });
 
     return () => map.remove();
-  }, [setSelectedZone]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
