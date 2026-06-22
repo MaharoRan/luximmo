@@ -273,7 +273,7 @@ def build_gold_score() -> pd.DataFrame:
 	# final score: positive minus a fraction of negatives, clipped to [0,1]
 	raw_final = score["positive_score"] - 0.5 * score["negative_score"]
 	raw_final = raw_final.clip(lower=0)
-	score["score_qualite_environnement"] = (100 * raw_final).round(2)
+	score["score_qualite_environnement"] = (10 + 90 * raw_final).round(2)
 
 	score["arrondissement_libelle"] = score["arrondissement"].apply(lambda value: f"Paris {int(value)}e Arrondissement")
 	score = score.sort_values("score_qualite_environnement", ascending=False).reset_index(drop=True)
