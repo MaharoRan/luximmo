@@ -147,9 +147,31 @@ def load_prices(year: int | None = None):
     ]
 
 
-def load_prix_iris():
+def load_prix_iris(year: int | None = None):
+    path_year = ROOT / "Indicateur_0" / "gold" / "statistiques_loyer_iris_year.parquet"
+
+    if path_year.exists():
+        prix = pd.read_parquet(path_year)
+
+        if year is None:
+            year = int(prix["year"].dropna().max())
+
+        prix = prix[prix["year"] == year].copy()
+
+        return prix[
+            [
+                "code_iris",
+                "year",
+                "loyer_moyen",
+                "loyer_median",
+                "loyer_maximum",
+                "transactions_count",
+            ]
+        ]
+
     path = ROOT / "Indicateur_0" / "gold" / "statistiques_loyer_iris.parquet"
     prix = pd.read_parquet(path)
+
     return prix[["code_iris", "loyer_moyen", "loyer_median", "loyer_maximum"]]
 
 
@@ -215,7 +237,7 @@ def get_arrondissements(year: int | None = Query(default=None)):
 @app.get("/api/iris")
 def get_iris(year: int | None = Query(default=None)):
     scores = load_gold_scores_iris()
-    prix = load_prix_iris()
+    prix = load_prix_iris(year)
 
     result = scores.merge(prix, on="code_iris", how="left")
 

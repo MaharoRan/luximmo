@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   fetchAvailableYears,
+  fetchArrondissements,
+  fetchIrisScores,
   formatEuro,
 } from "../services/scoresService";
 
@@ -193,6 +195,35 @@ function Sidebar({
       }
     });
   }, []);
+
+    useEffect(() => {
+    if (!selectedYear) return;
+
+    Promise.all([
+      fetchArrondissements(selectedYear),
+      fetchIrisScores(selectedYear),
+    ]).then(([arrData, irisData]) => {
+      if (selectedZone) {
+        if (selectedZone.code_iris) {
+          const freshZone = irisData[selectedZone.code_iris];
+          if (freshZone) setSelectedZone(freshZone);
+        } else if (selectedZone.arrondissement) {
+          const freshZone = arrData[selectedZone.arrondissement];
+          if (freshZone) setSelectedZone(freshZone);
+        }
+      }
+
+      if (compareZone) {
+        if (compareZone.code_iris) {
+          const freshZone = irisData[compareZone.code_iris];
+          if (freshZone) setCompareZone(freshZone);
+        } else if (compareZone.arrondissement) {
+          const freshZone = arrData[compareZone.arrondissement];
+          if (freshZone) setCompareZone(freshZone);
+        }
+      }
+    });
+  }, [selectedYear]);
 
   useEffect(() => {
     if (isWaitingForMapClick) {
