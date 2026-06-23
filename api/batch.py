@@ -1,7 +1,16 @@
 import asyncio
 import urllib.request
 import json
+import time
 from pathlib import Path
+
+# Tracking status
+batch_status = {
+    "chantiers_last_update": 0,
+    "trafic_last_update": 0,
+    "chantiers_interval": 3600,
+    "trafic_interval": 300,
+}
 
 # The frontend public directory
 PUBLIC_DIR = Path(__file__).resolve().parents[1] / "frontend" / "public" / "data"
@@ -15,6 +24,7 @@ def fetch_chantiers():
         
         out_path = PUBLIC_DIR / "chantiers_live.geojson"
         out_path.write_text(data, encoding="utf-8")
+        batch_status["chantiers_last_update"] = int(time.time())
         print(f"[Batch] Chantiers mis à jour ({len(data)} bytes)")
     except Exception as e:
         print(f"[Batch] Erreur lors de la mise à jour des chantiers : {e}")
@@ -40,6 +50,7 @@ def fetch_trafic():
         
         out_path = PUBLIC_DIR / "trafic_live.geojson"
         out_path.write_text(json.dumps(data), encoding="utf-8")
+        batch_status["trafic_last_update"] = int(time.time())
         print(f"[Batch] Trafic mis à jour ({len(unique_features)} arcs uniques)")
     except Exception as e:
         print(f"[Batch] Erreur lors de la mise à jour du trafic : {e}")

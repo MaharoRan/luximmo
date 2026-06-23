@@ -9,7 +9,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   border: 1px solid rgba(229, 231, 235, 1);
-  min-width: 200px;
+  min-width: 260px;
 }
 
 .layer-control h4 {
@@ -19,18 +19,24 @@
   font-weight: 600;
 }
 
+.layer-option-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.layer-option-container:last-child {
+  margin-bottom: 0;
+}
+
 .layer-option {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
   font-size: 13px;
   color: #183247;
   cursor: pointer;
   user-select: none;
-}
-
-.layer-option:last-child {
-  margin-bottom: 0;
 }
 
 .layer-option input {
@@ -42,4 +48,15 @@
 .layer-option .icon {
   margin-right: 6px;
   font-size: 14px;
+}
+
+.timer {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  min-width: 45px;
+  text-align: right;
 }

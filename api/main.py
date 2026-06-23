@@ -6,7 +6,7 @@ import pandas as pd
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from batch import update_chantiers_batch, update_trafic_batch
+from batch import update_chantiers_batch, update_trafic_batch, batch_status
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -285,3 +285,7 @@ def get_scores(year: int | None = Query(default=None)):
     result = result.fillna(0)
 
     return result.to_dict(orient="records")
+@app.get('/api/batch-status')
+def get_batch_status():
+    return batch_status
+
