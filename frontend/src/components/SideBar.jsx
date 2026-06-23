@@ -200,7 +200,7 @@ function Sidebar({
     });
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     if (!selectedYear) return;
 
     Promise.all([
@@ -282,7 +282,6 @@ function Sidebar({
       <aside className="sidebar">
         <h1>LUXIMMO</h1>
 
-<<<<<<< Updated upstream
         <div className="card">
           <label>Indicateur</label>
           <select
@@ -321,36 +320,6 @@ function Sidebar({
             setCompareMode(true);
             setIsModalOpen(true);
           }}
-=======
-      <div className="card">
-        <label>Année</label>
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
-          {years.map(year => (
-            <button
-              key={year}
-              onClick={() => setSelectedYear(year)}
-              style={{
-                flex: 1,
-                padding: '6px 0',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '12px',
-                background: selectedYear === year ? '#1f6f78' : '#e5e7eb',
-                color: selectedYear === year ? '#ffffff' : '#183247'
-              }}
-            >
-              {year}
-            </button>
-          ))}
-        </div>
-
-        <label>Indicateur</label>
-        <select
-          value={selectedIndicator}
-          onChange={(e) => setSelectedIndicator(e.target.value)}
->>>>>>> Stashed changes
         >
           Comparer des zones
         </button>
@@ -532,10 +501,10 @@ function Sidebar({
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          selectedZone?.prix_m2_moyen,
-                          compareZone?.prix_m2_moyen,
-                          true
-                        )
+                        selectedZone?.prix_m2_moyen,
+                        compareZone?.prix_m2_moyen,
+                        true
+                      )
                   }
                 >
                   {selectedZone?.prix_m2_moyen ? formatEuro(selectedZone.prix_m2_moyen) + " / m²" : "—"}
@@ -545,10 +514,10 @@ function Sidebar({
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          compareZone?.prix_m2_moyen,
-                          selectedZone?.prix_m2_moyen,
-                          true
-                        )
+                        compareZone?.prix_m2_moyen,
+                        selectedZone?.prix_m2_moyen,
+                        true
+                      )
                   }
                 >
                   {compareZone?.prix_m2_moyen ? formatEuro(compareZone.prix_m2_moyen) + " / m²" : "—"}
@@ -562,10 +531,10 @@ function Sidebar({
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          selectedZone?.prix_m2_median,
-                          compareZone?.prix_m2_median,
-                          true
-                        )
+                        selectedZone?.prix_m2_median,
+                        compareZone?.prix_m2_median,
+                        true
+                      )
                   }
                 >
                   {selectedZone?.prix_m2_median ? formatEuro(selectedZone.prix_m2_median) + " / m²" : "—"}
@@ -575,10 +544,10 @@ function Sidebar({
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          compareZone?.prix_m2_median,
-                          selectedZone?.prix_m2_median,
-                          true
-                        )
+                        compareZone?.prix_m2_median,
+                        selectedZone?.prix_m2_median,
+                        true
+                      )
                   }
                 >
                   {compareZone?.prix_m2_median ? formatEuro(compareZone.prix_m2_median) + " / m²" : "—"}
@@ -592,9 +561,9 @@ function Sidebar({
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          getGlobalScore(selectedZone),
-                          getGlobalScore(compareZone)
-                        )
+                        getGlobalScore(selectedZone),
+                        getGlobalScore(compareZone)
+                      )
                   }
                 >
                   {selectedZone ? getGlobalScore(selectedZone) : "—"}
@@ -604,9 +573,9 @@ function Sidebar({
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          getGlobalScore(compareZone),
-                          getGlobalScore(selectedZone)
-                        )
+                        getGlobalScore(compareZone),
+                        getGlobalScore(selectedZone)
+                      )
                   }
                 >
                   {compareZone ? getGlobalScore(compareZone) : "—"}

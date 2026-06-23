@@ -4,13 +4,8 @@ import MapView from "./components/MapView";
 import "./App.css";
 
 function App() {
-<<<<<<< Updated upstream
   const [selectedIndicator, setSelectedIndicator] = useState("quality");
   const [selectedYear, setSelectedYear] = useState(null);
-=======
-  const [selectedIndicator, setSelectedIndicator] = useState("prix_score");
-  const [selectedYear, setSelectedYear] = useState(2024);
->>>>>>> Stashed changes
   const [selectedZone, setSelectedZone] = useState(null);
   const [compareZone, setCompareZone] = useState(null);
   const [compareMode, setCompareMode] = useState(false);

@@ -20,7 +20,6 @@ app.add_middleware(
 )
 
 
-<<<<<<< Updated upstream
 def load_paris_iris():
     iris_path = ROOT / "geo" / "iris.parquet"
     iris = pd.read_parquet(iris_path)
@@ -42,18 +41,13 @@ def load_paris_iris():
 
 
 def load_gold_scores():
-=======
-def load_gold_scores(year: int = 2024):
-    """Charge les 4 indicateurs avec TOUTES leurs colonnes détaillées."""
->>>>>>> Stashed changes
     ind1 = pd.read_parquet(
         ROOT / "Indicateur_1" / "gold" / "score_qualite_de_vie.parquet"
     ).drop(columns=["arrondissement_libelle"], errors="ignore")
 
     ind2 = pd.read_parquet(
-        ROOT / "Indicateur_2" / "gold" / "score_interet_culturel_loisir_annee.parquet"
-    )
-    ind2 = ind2[ind2["year"] == year].drop(columns=["year", "arrondissement_libelle"], errors="ignore")
+        ROOT / "Indicateur_2" / "gold" / "score_interet_culturel_loisir.parquet"
+    ).drop(columns=["arrondissement_libelle"], errors="ignore")
 
     ind3 = pd.read_parquet(
         ROOT / "Indicateur_3" / "gold" / "score_acces_services_publiques.parquet"
@@ -88,7 +82,6 @@ def load_gold_scores(year: int = 2024):
     return scores
 
 
-<<<<<<< Updated upstream
 def load_gold_scores_iris():
     ind1 = pd.read_parquet(
         ROOT / "Indicateur_1" / "gold" / "score_qualite_de_vie_iris.parquet"
@@ -105,25 +98,6 @@ def load_gold_scores_iris():
     ind4 = pd.read_parquet(
         ROOT / "Indicateur_4" / "gold" / "score_acces_transport_iris.parquet"
     ).drop(columns=["arrondissement_libelle"], errors="ignore")
-=======
-def load_prix(year: int = 2024):
-    prix = pd.read_parquet(
-        ROOT / "Indicateur_0" / "gold" / "statistiques_loyer_annee.parquet"
-    )
-    prix = prix[prix["year"] == year].drop(columns=["year"], errors="ignore")
-    return prix[["arrondissement", "loyer_moyen", "loyer_median", "loyer_maximum"]]
-
-
-def load_gold_scores_iris(year: int = 2024):
-    """Charge les 4 indicateurs à l'échelle de l'IRIS avec TOUTES leurs colonnes détaillées."""
-    ind1 = pd.read_parquet(ROOT / "Indicateur_1" / "gold" / "score_qualite_de_vie_iris.parquet").drop(columns=["arrondissement_libelle"], errors="ignore")
-    
-    ind2 = pd.read_parquet(ROOT / "Indicateur_2" / "gold" / "score_interet_culturel_loisir_iris_annee.parquet")
-    ind2 = ind2[ind2["year"] == year].drop(columns=["year", "arrondissement_libelle"], errors="ignore")
-
-    ind3 = pd.read_parquet(ROOT / "Indicateur_3" / "gold" / "score_acces_services_publiques_iris.parquet").drop(columns=["arrondissement_libelle"], errors="ignore")
-    ind4 = pd.read_parquet(ROOT / "Indicateur_4" / "gold" / "score_acces_transport_iris.parquet").drop(columns=["arrondissement_libelle"], errors="ignore")
->>>>>>> Stashed changes
 
     ind1 = ind1.rename(columns={"score_qualite_environnement": "quality"})
     ind2 = ind2.rename(columns={"score_interet_culturel_loisir": "culture"})
@@ -144,7 +118,6 @@ def load_gold_scores_iris(year: int = 2024):
     return scores
 
 
-<<<<<<< Updated upstream
 def load_prices(year: int | None = None):
     prices_path = ROOT / "Indicateur_0" / "gold" / "prix_m2_arrondissement_year.parquet"
     prices = pd.read_parquet(prices_path)
@@ -247,16 +220,9 @@ def get_years():
 
 
 @app.get("/api/arrondissements")
-<<<<<<< Updated upstream
 def get_arrondissements(year: int | None = Query(default=None)):
     scores = load_gold_scores()
     prices = load_prices(year)
-=======
-def get_arrondissements(year: int = 2024):
-    """Retourne les données agrégées par arrondissement : scores détaillés + prix."""
-    scores = load_gold_scores(year)
-    prix = load_prix(year)
->>>>>>> Stashed changes
 
     result = scores.merge(prices, on="arrondissement", how="outer")
 
@@ -274,14 +240,8 @@ def get_arrondissements(year: int = 2024):
 
 
 @app.get("/api/iris")
-<<<<<<< Updated upstream
 def get_iris(year: int | None = Query(default=None)):
     scores = load_gold_scores_iris()
-=======
-def get_iris(year: int = 2024):
-    """Retourne les données agrégées par IRIS : scores détaillés + prix."""
-    scores = load_gold_scores_iris(year)
->>>>>>> Stashed changes
     prix = load_prix_iris(year)
 
     result = scores.merge(prix, on="code_iris", how="left")

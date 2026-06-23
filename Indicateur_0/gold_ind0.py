@@ -14,14 +14,7 @@ from utils.geo_helpers import load_paris_iris, attach_iris_from_points
 SILVER_DIR = REPO_ROOT / "Indicateur_0" / "silver"
 GOLD_DIR = REPO_ROOT / "Indicateur_0" / "gold"
 
-<<<<<<< Updated upstream
-
 def _prepare_dvf() -> pd.DataFrame:
-=======
-TARGET_YEARS = [2021, 2022, 2023, 2024, 2025]
-
-def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame]:
->>>>>>> Stashed changes
     files = list(SILVER_DIR.glob("paris_*.parquet"))
 
     if not files:
@@ -29,7 +22,6 @@ def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     dfs = [pd.read_parquet(file) for file in files]
     full_df = pd.concat(dfs, ignore_index=True)
-<<<<<<< Updated upstream
 
     full_df["date_mutation"] = pd.to_datetime(full_df["date_mutation"], errors="coerce")
     full_df["year"] = full_df["date_mutation"].dt.year
@@ -140,25 +132,7 @@ def main() -> None:
 
     path_iris = GOLD_DIR / "statistiques_loyer_iris.parquet"
     iris_global.to_parquet(path_iris, index=False)
-=======
-    
-    # Cross join IRIS with Years
-    iris_years = pd.merge(iris_base.assign(key=1), pd.DataFrame({"year": TARGET_YEARS, "key": 1}), on="key").drop("key", axis=1)
-    res_iris = iris_years.merge(grouped_iris, on=["code_iris", "year"], how="left")
-    
-    return res_arr, res_iris
-
-def main() -> None:
-    GOLD_DIR.mkdir(parents=True, exist_ok=True)
-    score_arr, score_iris = build_gold_scores()
-    
-    path_arr = GOLD_DIR / "statistiques_loyer_annee.parquet"
-    score_arr.to_parquet(path_arr, index=False)
-    print(f"Ecrit: {path_arr}")
-    
-    path_iris = GOLD_DIR / "statistiques_loyer_iris_annee.parquet"
-    score_iris.to_parquet(path_iris, index=False)
->>>>>>> Stashed changes
+    print(f"Ecrit: {path_iris}")
     print(f"Ecrit: {path_iris}")
 
     path_iris_year = GOLD_DIR / "statistiques_loyer_iris_year.parquet"

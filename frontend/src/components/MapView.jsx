@@ -154,7 +154,6 @@ function MapView({
     mapRef.current = map;
 
     map.on("load", async () => {
-<<<<<<< Updated upstream
       const [arrData, irisData, arrResponse, irisResponse] = await Promise.all([
         fetchArrondissements(selectedYearRef.current),
         fetchIrisScores(selectedYearRef.current),
@@ -163,12 +162,6 @@ function MapView({
       ]);
 
       arrDataRef.current = arrData;
-=======
-      const arrData = await fetchArrondissements(selectedYear);
-      arrDataRef.current = arrData;
-      
-      const irisData = await fetchIrisScores(selectedYear);
->>>>>>> Stashed changes
       irisDataRef.current = irisData;
 
       const arrGeojsonRaw = await arrResponse.json();
