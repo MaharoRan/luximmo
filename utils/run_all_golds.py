@@ -31,5 +31,19 @@ def main():
             
     print("\nAll gold scripts executed.")
 
+    # Load to MongoDB
+    loader_script = root / "utils" / "load_golds_to_mongo.py"
+    if loader_script.exists():
+        print("\nStarting to load gold files to MongoDB...")
+        result = subprocess.run([sys.executable, str(loader_script)], capture_output=True, text=True)
+        if result.returncode == 0:
+            print("Successfully loaded all gold files to MongoDB.")
+            if result.stdout:
+                print(result.stdout)
+        else:
+            print(f"Error loading to MongoDB:\n{result.stderr}")
+    else:
+        print("\nLoader script utils/load_golds_to_mongo.py not found.")
+
 if __name__ == "__main__":
     main()
