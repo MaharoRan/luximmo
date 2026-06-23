@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import RankingPanel from "./RankingPanel";
+import LayerControl from "./LayerControl";
 import {
   fetchArrondissements,
   fetchIrisScores,
@@ -114,6 +115,8 @@ function MapView({
   const irisDataRef = useRef({});
   const popupRef = useRef(null);
 
+  const [activeLayers, setActiveLayers] = useState([]);
+
   const compareModeRef = useRef(compareMode);
   const compareTargetRef = useRef(compareTarget);
   const selectedIndicatorRef = useRef(selectedIndicator);
@@ -138,6 +141,22 @@ function MapView({
   useEffect(() => {
     selectedIndicatorRef.current = selectedIndicator;
   }, [selectedIndicator]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    if (map.getLayer("chantiers-fill")) {
+      const visibility = activeLayers.includes("chantiers") ? "visible" : "none";
+      map.setLayoutProperty("chantiers-fill", "visibility", visibility);
+      map.setLayoutProperty("chantiers-icon", "visibility", visibility);
+    }
+    
+    if (map.getLayer("trafic-line")) {
+      const visibility = activeLayers.includes("trafic") ? "visible" : "none";
+      map.setLayoutProperty("trafic-line", "visibility", visibility);
+    }
+  }, [activeLayers]);
 
   useEffect(() => {
     selectedYearRef.current = selectedYear;
@@ -284,6 +303,71 @@ function MapView({
           "line-width": 1,
           "line-opacity": 0.4,
         },
+      });
+
+      // --- NEW: Chantiers Layer ---
+      map.addSource("chantiers_live", {
+        type: "geojson",
+        data: "/data/chantiers_live.geojson",
+      });
+
+      map.addLayer({
+        id: "chantiers-fill",
+        type: "fill",
+        source: "chantiers_live",
+        paint: {
+          "fill-color": "#ec4899", // pink
+          "fill-opacity": 0.4,
+        },
+        layout: {
+          "visibility": "none",
+        }
+      });
+
+      map.addLayer({
+        id: "chantiers-icon",
+        type: "symbol",
+        source: "chantiers_live",
+        layout: {
+          "text-field": "🚧",
+          "text-size": 16,
+          "text-allow-overlap": true,
+          "visibility": "none",
+        },
+        paint: {
+          "text-color": "#fbbf24", // yellow
+          "text-halo-color": "#000000", // black border
+          "text-halo-width": 2
+        }
+      });
+
+      // --- NEW: Trafic Layer ---
+      map.addSource("trafic_live", {
+        type: "geojson",
+        data: "/data/trafic_live.geojson",
+      });
+
+      map.addLayer({
+        id: "trafic-line",
+        type: "line",
+        source: "trafic_live",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+          "visibility": "none",
+        },
+        paint: {
+          "line-width": 4,
+          "line-color": [
+            "match",
+            ["get", "etat_trafic"],
+            "Fluide", "#10b981",       // green
+            "Pré-saturé", "#f59e0b",   // orange
+            "Saturé", "#ef4444",       // red
+            "Bloqué", "#7f1d1d",       // dark red
+            "#9ca3af"                  // Inconnu / default gray
+          ]
+        }
       });
 
       // Highlight overlays driven by feature-state
@@ -599,19 +683,29 @@ function MapView({
     updateData();
   }, [selectedYear]);
 
+  const toggleLayer = (layerId) => {
+    setActiveLayers(prev => 
+      prev.includes(layerId) ? prev.filter(l => l !== layerId) : [...prev, layerId]
+    );
+  };
+
   return (
     <main className="map-section">
       <div className="map-header">
-        <h2>Carte des scores immobiliers</h2>
-        <p>Clique sur un arrondissement pour zoomer et voir les détails</p>
+        <h2 className="map-title">{indicatorLabels[selectedIndicator]}</h2>
       </div>
 
-      <div ref={mapContainer} className="map-container" />
+      <div className="map-wrapper">
+        <div ref={mapContainer} className="map-container" />
+        <LayerControl activeLayers={activeLayers} toggleLayer={toggleLayer} />
+      </div>
 
-      <RankingPanel
-        selectedIndicator={selectedIndicator}
-        selectedYear={selectedYear}
-      />
+      {compareMode && (
+        <RankingPanel
+          selectedIndicator={selectedIndicator}
+          selectedYear={selectedYear}
+        />
+      )}
     </main>
   );
 }

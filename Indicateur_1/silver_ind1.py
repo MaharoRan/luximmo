@@ -125,6 +125,17 @@ def clean_zones_touristiques() -> None:
     _write_parquet(cleaned, "zones-touristiques-internationales.parquet")
 
 
+def clean_chantiers() -> None:
+    df = pd.read_parquet(RAW_DIR / "chantiers-a-paris.parquet")
+    cleaned = _prepare_output(df, ["num_emprise", "cp_arrondissement", "longitude", "latitude"])
+    _write_parquet(cleaned, "chantiers-a-paris.parquet")
+
+def clean_trafic() -> None:
+    df = pd.read_parquet(RAW_DIR / "trafic.parquet")
+    cleaned = _prepare_output(df, ["iu_ac", "etat_trafic", "longitude", "latitude"])
+    _write_parquet(cleaned, "trafic.parquet")
+
+
 def main() -> None:
     SILVER_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -134,6 +145,8 @@ def main() -> None:
     clean_les_arbres()
     clean_sanisettes()
     clean_zones_touristiques()
+    clean_chantiers()
+    clean_trafic()
 
 
 if __name__ == "__main__":

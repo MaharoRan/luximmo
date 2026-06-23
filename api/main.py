@@ -1,12 +1,24 @@
+import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from batch import update_chantiers_batch, update_trafic_batch
+
 ROOT = Path(__file__).resolve().parents[1]
 
-app = FastAPI(title="LuxImmo API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task_chantiers = asyncio.create_task(update_chantiers_batch())
+    task_trafic = asyncio.create_task(update_trafic_batch())
+    yield
+    task_chantiers.cancel()
+    task_trafic.cancel()
+
+app = FastAPI(title="LuxImmo API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

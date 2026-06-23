@@ -23,6 +23,8 @@ const indicatorDetails = {
     { key: "q_islands_equip_count", label: "Îlots équipés", unit: "" },
     { key: "q_sanisettes_count", label: "Sanisettes", unit: "" },
     { key: "q_zones_tourism", label: "Zones touristiques", unit: "" },
+    { key: "q_chantiers_count", label: "Chantiers", unit: "" },
+    { key: "q_trafic_count", label: "Trafic dense", unit: "" },
   ],
   culture: [
     { key: "c_activities_count", label: "Activités culturelles", unit: "" },

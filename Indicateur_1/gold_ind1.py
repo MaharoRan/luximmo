@@ -63,12 +63,30 @@ def _load_tourism_zones_scores(iris: pd.DataFrame, group_col: str) -> pd.DataFra
     grouped["zones_tourism_raw"] = grouped["zones_tourism"]
     return grouped
 
+def _load_chantiers_scores(iris: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    df = pd.read_parquet(SILVER_DIR / "chantiers-a-paris.parquet")
+    df = attach_iris_from_points(df, "longitude", "latitude", iris)
+    grouped = df.groupby(group_col, as_index=False).agg(chantiers_count=(group_col, "count"))
+    grouped["chantiers_raw"] = grouped["chantiers_count"]
+    return grouped
+
+def _load_trafic_scores(iris: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    df = pd.read_parquet(SILVER_DIR / "trafic.parquet")
+    df = attach_iris_from_points(df, "longitude", "latitude", iris)
+    # We only count "Pré-saturé", "Saturé", "Bloqué" as negative
+    df_congested = df[df["etat_trafic"].isin(["Pré-saturé", "Saturé", "Bloqué"])]
+    grouped = df_congested.groupby(group_col, as_index=False).agg(trafic_count=(group_col, "count"))
+    grouped["trafic_raw"] = grouped["trafic_count"]
+    return grouped
+
 def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) -> pd.DataFrame:
     trees = _load_trees_scores(iris, group_col)
     islands = _load_freshness_islands_scores(iris, group_col)
     islands_equip = _load_islands_equipements_scores(iris, group_col)
     sanisettes = _load_sanisettes_scores(iris, group_col)
     zones = _load_tourism_zones_scores(iris, group_col)
+    chantiers = _load_chantiers_scores(iris, group_col)
+    trafic = _load_trafic_scores(iris, group_col)
 
     score = base_df.copy()
     score = score.merge(trees, on=group_col, how="left")
@@ -76,6 +94,8 @@ def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) ->
     score = score.merge(islands_equip, on=group_col, how="left")
     score = score.merge(sanisettes, on=group_col, how="left")
     score = score.merge(zones, on=group_col, how="left")
+    score = score.merge(chantiers, on=group_col, how="left")
+    score = score.merge(trafic, on=group_col, how="left")
 
     numeric_columns = [
         "trees_count", "trees_raw",
@@ -83,6 +103,8 @@ def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) ->
         "islands_equip_count", "islands_equip_raw",
         "sanisettes_count", "sanisettes_raw",
         "zones_tourism", "zones_tourism_raw",
+        "chantiers_count", "chantiers_raw",
+        "trafic_count", "trafic_raw",
     ]
     for column in numeric_columns:
         if column not in score.columns:
@@ -94,13 +116,15 @@ def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) ->
     score["islands_equip_norm"] = _normalize_weights(score["islands_equip_raw"]) 
     score["sanisettes_norm"] = _normalize_weights(score["sanisettes_raw"]) 
     score["zones_tourism_norm"] = _normalize_weights(score["zones_tourism_raw"]) 
+    score["chantiers_norm"] = _normalize_weights(score["chantiers_raw"]) 
+    score["trafic_norm"] = _normalize_weights(score["trafic_raw"]) 
 
     score["positive_score"] = (
         0.40 * score["trees_norm"]
         + 0.40 * score["islands_norm"]
         + 0.20 * score["islands_equip_norm"]
     )
-    score["negative_score"] = 0.5 * (score["sanisettes_norm"] + score["zones_tourism_norm"])
+    score["negative_score"] = 0.25 * score["sanisettes_norm"] + 0.25 * score["zones_tourism_norm"] + 0.25 * score["chantiers_norm"] + 0.25 * score["trafic_norm"]
 
     raw_final = score["positive_score"] - 0.2 * score["negative_score"]
     s_min = raw_final.min()
