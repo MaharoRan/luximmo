@@ -51,6 +51,7 @@ function enrichArrondissementsGeojson(geojson, arrData, indicator) {
 
       return {
         ...feature,
+        id: arrNum,
         properties: {
           ...feature.properties,
           arrondissement: arrNum,
@@ -78,6 +79,7 @@ function enrichIrisGeojson(geojson, irisData, indicator) {
 
       return {
         ...feature,
+        id: Number(codeIris),
         properties: {
           ...feature.properties,
           code_iris: codeIris,
@@ -101,6 +103,8 @@ function MapView({
   selectedYear,
   compareMode,
   compareTarget,
+  selectedZone,
+  compareZone,
   setSelectedZone,
   setCompareZone,
 }) {
@@ -114,6 +118,14 @@ function MapView({
   const compareTargetRef = useRef(compareTarget);
   const selectedIndicatorRef = useRef(selectedIndicator);
   const selectedYearRef = useRef(selectedYear);
+  const selectedZoneRef = useRef(selectedZone);
+  const compareZoneRef = useRef(compareZone);
+
+  useEffect(() => {
+    selectedZoneRef.current = selectedZone;
+    compareZoneRef.current = compareZone;
+    updateOutlineFilters();
+  }, [selectedZone, compareZone]);
 
   useEffect(() => {
     compareModeRef.current = compareMode;
@@ -176,14 +188,12 @@ function MapView({
 
       map.addSource("arrondissements", {
         type: "geojson",
-        data: arrGeojson,
-        generateId: true,
+        data: arrGeojson
       });
 
       map.addSource("iris", {
         type: "geojson",
-        data: irisGeojson,
-        generateId: true,
+        data: irisGeojson
       });
 
       map.addLayer({
@@ -283,6 +293,39 @@ function MapView({
         },
       });
 
+      // Highlight overlays driven by feature-state
+      ["arrondissements", "iris"].forEach((source) => {
+        map.addLayer({
+          id: `${source}-highlight-fill`,
+          type: "fill",
+          source: source,
+          paint: {
+            "fill-color": [
+              "case",
+              ["boolean", ["feature-state", "isZoneA"], false], "#3b82f6",
+              ["boolean", ["feature-state", "isZoneB"], false], "#ec4899",
+              "transparent"
+            ],
+            "fill-opacity": 0.3,
+          },
+        });
+
+        map.addLayer({
+          id: `${source}-highlight-outline`,
+          type: "line",
+          source: source,
+          paint: {
+            "line-color": [
+              "case",
+              ["boolean", ["feature-state", "isZoneA"], false], "#3b82f6",
+              ["boolean", ["feature-state", "isZoneB"], false], "#ec4899",
+              "transparent"
+            ],
+            "line-width": 5,
+          },
+        });
+      });
+
       popupRef.current = new maplibregl.Popup({
         closeButton: false,
         closeOnClick: false,
@@ -355,14 +398,16 @@ function MapView({
         const feature = e.features[0];
         const props = feature.properties;
 
-        const bounds = new maplibregl.LngLatBounds();
-        extendBounds(bounds, feature.geometry.coordinates);
+        if (!compareModeRef.current) {
+          const bounds = new maplibregl.LngLatBounds();
+          extendBounds(bounds, feature.geometry.coordinates);
 
-        map.fitBounds(bounds, {
-          padding: 90,
-          duration: 900,
-          maxZoom: isIris ? 15 : 13.5,
-        });
+          map.fitBounds(bounds, {
+            padding: 90,
+            duration: 900,
+            maxZoom: isIris ? 15 : 13.5,
+          });
+        }
 
         const zone = isIris
           ? {
@@ -395,6 +440,48 @@ function MapView({
 
     return () => map.remove();
   }, []);
+
+  const previousHighlightARef = useRef(null);
+  const previousHighlightBRef = useRef(null);
+
+  const updateOutlineFilters = () => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const zoneA = selectedZoneRef.current;
+    const zoneB = compareZoneRef.current;
+
+    // Clear previous feature states
+    if (previousHighlightARef.current) {
+      map.setFeatureState(previousHighlightARef.current, { isZoneA: false });
+      previousHighlightARef.current = null;
+    }
+    if (previousHighlightBRef.current) {
+      map.setFeatureState(previousHighlightBRef.current, { isZoneB: false });
+      previousHighlightBRef.current = null;
+    }
+
+    // Set new feature states
+    if (zoneA) {
+      const isIris = zoneA.code_iris !== undefined;
+      const source = isIris ? "iris" : "arrondissements";
+      const id = isIris ? Number(zoneA.code_iris) : Number(zoneA.arrondissement || zoneA.c_ar);
+      
+      const featureIdentifier = { source, id };
+      map.setFeatureState(featureIdentifier, { isZoneA: true });
+      previousHighlightARef.current = featureIdentifier;
+    }
+
+    if (zoneB) {
+      const isIris = zoneB.code_iris !== undefined;
+      const source = isIris ? "iris" : "arrondissements";
+      const id = isIris ? Number(zoneB.code_iris) : Number(zoneB.arrondissement || zoneB.c_ar);
+
+      const featureIdentifier = { source, id };
+      map.setFeatureState(featureIdentifier, { isZoneB: true });
+      previousHighlightBRef.current = featureIdentifier;
+    }
+  };
 
   useEffect(() => {
     const map = mapRef.current;

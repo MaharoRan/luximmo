@@ -154,18 +154,22 @@ def load_prices(year: int | None = None):
 
     prices = prices[prices["year"] == year].copy()
 
-    prices["loyer_moyen"] = prices["prix_m2_mean"]
+    prices["loyer_moyen"] = prices["prix_m2_moyen"]
     prices["loyer_median"] = prices["prix_m2_median"]
-    prices["loyer_maximum"] = prices["prix_m2_median"]
+    prices["loyer_maximum"] = prices["prix_m2_maximum"]
 
     return prices[
         [
             "arrondissement",
             "year",
+            "prix_vente_moyen",
+            "prix_vente_median",
+            "surface_moyenne",
+            "surface_mediane",
+            "prix_m2_moyen",
             "prix_m2_median",
-            "prix_m2_mean",
-            "valeur_fonciere_median",
-            "surface_median",
+            "prix_m2_minimum",
+            "prix_m2_maximum",
             "transactions_count",
             "loyer_moyen",
             "loyer_median",
@@ -176,6 +180,7 @@ def load_prices(year: int | None = None):
 
 def load_prix_iris(year: int | None = None):
     path_year = ROOT / "Indicateur_0" / "gold" / "statistiques_loyer_iris_year.parquet"
+    path_global = ROOT / "Indicateur_0" / "gold" / "statistiques_loyer_iris.parquet"
 
     if path_year.exists():
         prix = pd.read_parquet(path_year)
@@ -184,27 +189,22 @@ def load_prix_iris(year: int | None = None):
             year = int(prix["year"].dropna().max())
 
         prix = prix[prix["year"] == year].copy()
+    else:
+        prix = pd.read_parquet(path_global)
 
-        return prix[
-            [
-                "code_iris",
-                "year",
-                "loyer_moyen",
-                "loyer_median",
-                "loyer_maximum",
-                "transactions_count",
-            ]
-        ]
+    prix["loyer_moyen"] = prix.get("prix_m2_moyen", prix.get("loyer_moyen"))
+    prix["loyer_median"] = prix.get("prix_m2_median", prix.get("loyer_median"))
+    prix["loyer_maximum"] = prix.get("prix_m2_maximum", prix.get("loyer_maximum"))
 
-    path = ROOT / "Indicateur_0" / "gold" / "statistiques_loyer_iris.parquet"
-    prix = pd.read_parquet(path)
-
-=======
-def load_prix_iris(year: int = 2024):
-    prix = pd.read_parquet(ROOT / "Indicateur_0" / "gold" / "statistiques_loyer_iris_annee.parquet")
-    prix = prix[prix["year"] == year].drop(columns=["year"], errors="ignore")
->>>>>>> Stashed changes
-    return prix[["code_iris", "loyer_moyen", "loyer_median", "loyer_maximum"]]
+    cols_to_keep = [
+        "code_iris", "year", "prix_vente_moyen", "prix_vente_median",
+        "surface_moyenne", "surface_mediane", "prix_m2_moyen",
+        "prix_m2_median", "prix_m2_minimum", "prix_m2_maximum",
+        "transactions_count", "loyer_moyen", "loyer_median", "loyer_maximum"
+    ]
+    
+    existing_cols = [c for c in cols_to_keep if c in prix.columns]
+    return prix[existing_cols]
 
 
 def add_prix_score(result: pd.DataFrame) -> pd.DataFrame:

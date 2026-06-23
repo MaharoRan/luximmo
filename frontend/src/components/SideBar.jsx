@@ -47,9 +47,13 @@ const indicatorDetails = {
     { key: "t_transport_segments", label: "Voirie", unit: "" },
   ],
   prix_score: [
-    { key: "loyer_moyen", label: "Prix moyen", unit: "€" },
-    { key: "loyer_median", label: "Prix médian", unit: "€" },
-    { key: "loyer_maximum", label: "Prix maximum", unit: "€" },
+    { key: "prix_m2_moyen", label: "Prix au m² moyen", unit: "€/m²" },
+    { key: "prix_m2_median", label: "Prix au m² médian", unit: "€/m²" },
+    { key: "prix_vente_moyen", label: "Prix de vente moyen", unit: "€" },
+    { key: "prix_vente_median", label: "Prix de vente médian", unit: "€" },
+    { key: "surface_moyenne", label: "Surface moyenne", unit: "m²" },
+    { key: "surface_mediane", label: "Surface médiane", unit: "m²" },
+    { key: "transactions_count", label: "Nombre de ventes", unit: "" },
   ],
 };
 
@@ -88,15 +92,15 @@ function getCompareClass(valA, valB, lowerIsBetter = false) {
 
 function formatDetailValue(value, unit) {
   if (value == null) return "–";
-  if (unit === "€") return formatEuro(value);
+  if (unit === "€" || unit === "€/m²") return formatEuro(value) + (unit === "€/m²" ? " / m²" : "");
 
   if (typeof value === "number") {
     return Number.isInteger(value)
-      ? value.toLocaleString("fr-FR")
-      : value.toFixed(1);
+      ? value.toLocaleString("fr-FR") + (unit ? ` ${unit}` : "")
+      : value.toFixed(1) + (unit ? ` ${unit}` : "");
   }
 
-  return value;
+  return value + (unit ? ` ${unit}` : "");
 }
 
 function ScoreRows({ zone }) {
@@ -120,18 +124,18 @@ function PrixBlock({ zone }) {
   return (
     <div className="prix-block">
       <div className="prix-row">
-        <span>Prix moyen</span>
-        <b>{formatEuro(zone.loyer_moyen)}</b>
+        <span>Prix au m² moyen</span>
+        <b>{formatEuro(zone.prix_m2_moyen)} / m²</b>
       </div>
 
       <div className="prix-row">
-        <span>Prix médian</span>
-        <b>{formatEuro(zone.loyer_median)}</b>
+        <span>Prix au m² médian</span>
+        <b>{formatEuro(zone.prix_m2_median)} / m²</b>
       </div>
 
       <div className="prix-row">
-        <span>Prix maximum</span>
-        <b>{formatEuro(zone.loyer_maximum)}</b>
+        <span>Prix de vente médian</span>
+        <b>{formatEuro(zone.prix_vente_median)}</b>
       </div>
     </div>
   );
@@ -261,7 +265,7 @@ function Sidebar({
 
   const displayScore = selectedZone
     ? selectedIndicator === "prix_score"
-      ? formatEuro(selectedZone.loyer_median)
+      ? formatEuro(selectedZone.prix_m2_median) + " / m²"
       : `${selectedZone[selectedIndicator] ?? 50} / 100`
     : null;
 
@@ -294,17 +298,21 @@ function Sidebar({
         </div>
 
         <div className="card">
-          <label>Année</label>
-          <select
-            value={selectedYear || ""}
-            onChange={(event) => setSelectedYear(Number(event.target.value))}
-          >
-            {availableYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
+          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Année</span>
+            <b>{selectedYear || ""}</b>
+          </label>
+          {availableYears.length > 0 && (
+            <input
+              type="range"
+              min={Math.min(...availableYears)}
+              max={Math.max(...availableYears)}
+              step={1}
+              value={selectedYear || Math.max(...availableYears)}
+              onChange={(event) => setSelectedYear(Number(event.target.value))}
+              style={{ width: "100%", marginTop: "10px", cursor: "pointer", accentColor: "#1f6f78" }}
+            />
+          )}
         </div>
 
         <button
@@ -518,62 +526,62 @@ function Sidebar({
               })}
 
               <div className="compare-row">
-                <span>Prix moyen</span>
+                <span>Prix au m² moyen</span>
                 <b
                   className={
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          selectedZone?.loyer_moyen,
-                          compareZone?.loyer_moyen,
+                          selectedZone?.prix_m2_moyen,
+                          compareZone?.prix_m2_moyen,
                           true
                         )
                   }
                 >
-                  {selectedZone ? formatEuro(selectedZone.loyer_moyen) : "—"}
+                  {selectedZone?.prix_m2_moyen ? formatEuro(selectedZone.prix_m2_moyen) + " / m²" : "—"}
                 </b>
                 <b
                   className={
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          compareZone?.loyer_moyen,
-                          selectedZone?.loyer_moyen,
+                          compareZone?.prix_m2_moyen,
+                          selectedZone?.prix_m2_moyen,
                           true
                         )
                   }
                 >
-                  {compareZone ? formatEuro(compareZone.loyer_moyen) : "—"}
+                  {compareZone?.prix_m2_moyen ? formatEuro(compareZone.prix_m2_moyen) + " / m²" : "—"}
                 </b>
               </div>
 
               <div className="compare-row">
-                <span>Prix médian</span>
+                <span>Prix au m² médian</span>
                 <b
                   className={
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          selectedZone?.loyer_median,
-                          compareZone?.loyer_median,
+                          selectedZone?.prix_m2_median,
+                          compareZone?.prix_m2_median,
                           true
                         )
                   }
                 >
-                  {selectedZone ? formatEuro(selectedZone.loyer_median) : "—"}
+                  {selectedZone?.prix_m2_median ? formatEuro(selectedZone.prix_m2_median) + " / m²" : "—"}
                 </b>
                 <b
                   className={
                     isMismatch
                       ? ""
                       : getCompareClass(
-                          compareZone?.loyer_median,
-                          selectedZone?.loyer_median,
+                          compareZone?.prix_m2_median,
+                          selectedZone?.prix_m2_median,
                           true
                         )
                   }
                 >
-                  {compareZone ? formatEuro(compareZone.loyer_median) : "—"}
+                  {compareZone?.prix_m2_median ? formatEuro(compareZone.prix_m2_median) + " / m²" : "—"}
                 </b>
               </div>
 
@@ -609,7 +617,11 @@ function Sidebar({
             <div className="modal-actions">
               <button
                 className="cancel-btn"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setCompareMode(false);
+                  setCompareZone(null);
+                }}
               >
                 Fermer la comparaison
               </button>

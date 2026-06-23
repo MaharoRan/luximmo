@@ -39,6 +39,7 @@ function App() {
         compareMode={compareMode}
         compareTarget={compareTarget}
         selectedZone={selectedZone}
+        compareZone={compareZone}
         setSelectedZone={setSelectedZone}
         setCompareZone={setCompareZone}
       />

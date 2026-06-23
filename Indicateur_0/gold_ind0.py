@@ -40,130 +40,81 @@ def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame]:
     full_df["latitude"] = pd.to_numeric(full_df["latitude"], errors="coerce")
 
     full_df["arrondissement"] = full_df["code_postal"].astype(str).str[-2:].astype(int)
-    full_df["prix_m2"] = full_df["valeur_fonciere"] / full_df["surface_reelle_bati"]
 
-    full_df = full_df.dropna(
+    # Grouper par mutation
+    if "id_mutation" in full_df.columns:
+        mutation_df = full_df.groupby("id_mutation").agg(
+            valeur_fonciere=("valeur_fonciere", "max"),
+            surface_reelle_bati=("surface_reelle_bati", "sum"),
+            year=("year", "first"),
+            arrondissement=("arrondissement", "first"),
+            longitude=("longitude", "first"),
+            latitude=("latitude", "first")
+        ).reset_index()
+    else:
+        mutation_df = full_df
+
+    # Calcul du prix au m2
+    mutation_df["prix_m2"] = mutation_df["valeur_fonciere"] / mutation_df["surface_reelle_bati"]
+
+    mutation_df = mutation_df.dropna(
         subset=["prix_m2", "year", "arrondissement", "longitude", "latitude"]
     ).copy()
 
-    full_df = full_df[
-        (full_df["prix_m2"] >= 1000)
-        & (full_df["prix_m2"] <= 30000)
+    # Filtrer les valeurs aberrantes
+    mutation_df = mutation_df[
+        (mutation_df["prix_m2"] >= 1000)
+        & (mutation_df["prix_m2"] <= 30000)
     ].copy()
 
-    return full_df
+    return mutation_df
+
+
+def _agg_scores(df: pd.DataFrame, groupby_cols: str | list[str]) -> pd.DataFrame:
+    agg_df = df.groupby(groupby_cols).agg(
+        prix_vente_moyen=("valeur_fonciere", "mean"),
+        prix_vente_median=("valeur_fonciere", "median"),
+        surface_moyenne=("surface_reelle_bati", "mean"),
+        surface_mediane=("surface_reelle_bati", "median"),
+        surface_maximum=("surface_reelle_bati", "max"),
+        prix_m2_moyen=("prix_m2", "mean"),
+        prix_m2_median=("prix_m2", "median"),
+        prix_m2_minimum=("prix_m2", "min"),
+        prix_m2_maximum=("prix_m2", "max"),
+        transactions_count=("prix_m2", "count"),
+    ).reset_index()
+
+    cols_to_round = [
+        "prix_vente_moyen", "prix_vente_median", 
+        "surface_moyenne", "surface_mediane", "surface_maximum",
+        "prix_m2_moyen", "prix_m2_median", "prix_m2_minimum", "prix_m2_maximum"
+    ]
+    agg_df[cols_to_round] = agg_df[cols_to_round].round(0)
+    return agg_df
 
 
 def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     full_df = _prepare_dvf()
 
     # ARRONDISSEMENT + YEAR
-    arr_year = full_df.groupby(["arrondissement", "year"]).agg(
-        prix_m2_median=("prix_m2", "median"),
-        prix_m2_mean=("prix_m2", "mean"),
-        valeur_fonciere_median=("valeur_fonciere", "median"),
-        surface_median=("surface_reelle_bati", "median"),
-        transactions_count=("prix_m2", "count"),
-    ).reset_index()
-
-    arr_year["prix_m2_median"] = arr_year["prix_m2_median"].round(0)
-    arr_year["prix_m2_mean"] = arr_year["prix_m2_mean"].round(0)
-    arr_year["valeur_fonciere_median"] = arr_year["valeur_fonciere_median"].round(0)
-    arr_year["surface_median"] = arr_year["surface_median"].round(1)
+    arr_year = _agg_scores(full_df, ["arrondissement", "year"])
 
     # ARRONDISSEMENT GLOBAL
-    arr_global = full_df.groupby("arrondissement").agg(
-        loyer_moyen=("prix_m2", "mean"),
-        loyer_median=("prix_m2", "median"),
-        loyer_minimum=("prix_m2", "min"),
-        loyer_maximum=("prix_m2", "max"),
-    ).reset_index()
-
-    arr_global[["loyer_moyen", "loyer_median", "loyer_minimum", "loyer_maximum"]] = (
-        arr_global[["loyer_moyen", "loyer_median", "loyer_minimum", "loyer_maximum"]].round(0)
-    )
-
+    arr_global = _agg_scores(full_df, ["arrondissement"])
     arrondissements_df = pd.DataFrame({"arrondissement": list(range(1, 21))})
     arr_global = arrondissements_df.merge(arr_global, on="arrondissement", how="left")
 
     # IRIS
     iris = load_paris_iris()
     iris_df = attach_iris_from_points(full_df, "longitude", "latitude", iris)
+    iris_base = iris[["code_iris", "nom_iris", "arrondissement", "nom_com"]].drop_duplicates()
 
     # IRIS GLOBAL
-    iris_global = iris_df.groupby("code_iris").agg(
-        loyer_moyen=("prix_m2", "mean"),
-        loyer_median=("prix_m2", "median"),
-        loyer_minimum=("prix_m2", "min"),
-        loyer_maximum=("prix_m2", "max"),
-=======
-    
-    # Process Year
-    full_df["date_mutation"] = pd.to_datetime(full_df["date_mutation"], errors="coerce")
-    full_df["year"] = full_df["date_mutation"].dt.year
-    
-    df_with_year = full_df[full_df["year"].notna()].copy()
-    df_no_year = full_df[full_df["year"].isna()].copy()
-    
-    if not df_no_year.empty:
-        dfs_to_concat = [df_with_year]
-        for y in TARGET_YEARS:
-            df_y = df_no_year.copy()
-            df_y["year"] = y
-            dfs_to_concat.append(df_y)
-        full_df = pd.concat(dfs_to_concat, ignore_index=True)
-    else:
-        full_df = df_with_year
-        
-    full_df["year"] = full_df["year"].astype(int)
-    full_df = full_df[full_df["year"].isin(TARGET_YEARS)].copy()
-    
-    # Attach IRIS and Arrondissement based on lon/lat
-    iris = load_paris_iris()
-    full_df = attach_iris_from_points(full_df, "longitude", "latitude", iris)
-    
-    # --- ARRONDISSEMENT LEVEL ---
-    grouped_arr = full_df.groupby(["arrondissement", "year"])["valeur_fonciere"].agg(
-        loyer_moyen="mean",
-        loyer_median="median",
-        loyer_minimum="min",
-        loyer_maximum="max"
-    ).reset_index()
-    
-    arrondissements = list(range(1, 21))
-    arr_years = pd.DataFrame(list(itertools.product(arrondissements, TARGET_YEARS)), columns=["arrondissement", "year"])
-    res_arr = arr_years.merge(grouped_arr, on=["arrondissement", "year"], how="left")
-    
-    # --- IRIS LEVEL ---
-    grouped_iris = full_df.groupby(["code_iris", "year"])["valeur_fonciere"].agg(
-        loyer_moyen="mean",
-        loyer_median="median",
-        loyer_minimum="min",
-        loyer_maximum="max"
->>>>>>> Stashed changes
-    ).reset_index()
-
-    iris_global[["loyer_moyen", "loyer_median", "loyer_minimum", "loyer_maximum"]] = (
-        iris_global[["loyer_moyen", "loyer_median", "loyer_minimum", "loyer_maximum"]].round(0)
-    )
-
-    iris_base = iris[["code_iris", "nom_iris", "arrondissement", "nom_com"]].drop_duplicates()
-<<<<<<< Updated upstream
+    iris_global = _agg_scores(iris_df, ["code_iris"])
     iris_global = iris_base.merge(iris_global, on="code_iris", how="left")
 
     # IRIS + YEAR
-    iris_year = iris_df.groupby(["code_iris", "year"]).agg(
-        loyer_moyen=("prix_m2", "mean"),
-        loyer_median=("prix_m2", "median"),
-        loyer_minimum=("prix_m2", "min"),
-        loyer_maximum=("prix_m2", "max"),
-        transactions_count=("prix_m2", "count"),
-    ).reset_index()
-
-    iris_year[["loyer_moyen", "loyer_median", "loyer_minimum", "loyer_maximum"]] = (
-        iris_year[["loyer_moyen", "loyer_median", "loyer_minimum", "loyer_maximum"]].round(0)
-    )
-
+    iris_year = _agg_scores(iris_df, ["code_iris", "year"])
     iris_year = iris_base.merge(iris_year, on="code_iris", how="left")
 
     return (
