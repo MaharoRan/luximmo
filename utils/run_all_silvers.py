@@ -10,7 +10,8 @@ def main():
         "Indicateur_1/silver_ind1.py",
         "Indicateur_2/silver_ind2.py",
         "Indicateur_3/silver_ind3.py",
-        "Indicateur_4/silver_ind4.py"
+        "Indicateur_4/silver_ind4.py",
+        "utils/load_to_postgis.py"
     ]
     
     print("Starting execution of all silver scripts...\n")
