@@ -4,7 +4,7 @@ import MapView from "./components/MapView";
 import "./App.css";
 
 function App() {
-  const [selectedIndicator, setSelectedIndicator] = useState("quality");
+  const [selectedIndicator, setSelectedIndicator] = useState("prix_score");
   const [selectedZone, setSelectedZone] = useState(null);
   const [compareZone, setCompareZone] = useState(null);
   const [compareMode, setCompareMode] = useState(false);
@@ -29,6 +29,7 @@ function App() {
         selectedIndicator={selectedIndicator}
         compareMode={compareMode}
         compareTarget={compareTarget}
+        selectedZone={selectedZone}
         setSelectedZone={setSelectedZone}
         setCompareZone={setCompareZone}
       />
