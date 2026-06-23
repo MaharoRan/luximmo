@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import itertools
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
@@ -13,8 +14,14 @@ from utils.geo_helpers import load_paris_iris, attach_iris_from_points
 SILVER_DIR = REPO_ROOT / "Indicateur_0" / "silver"
 GOLD_DIR = REPO_ROOT / "Indicateur_0" / "gold"
 
+<<<<<<< Updated upstream
 
 def _prepare_dvf() -> pd.DataFrame:
+=======
+TARGET_YEARS = [2021, 2022, 2023, 2024, 2025]
+
+def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame]:
+>>>>>>> Stashed changes
     files = list(SILVER_DIR.glob("paris_*.parquet"))
 
     if not files:
@@ -22,6 +29,7 @@ def _prepare_dvf() -> pd.DataFrame:
 
     dfs = [pd.read_parquet(file) for file in files]
     full_df = pd.concat(dfs, ignore_index=True)
+<<<<<<< Updated upstream
 
     full_df["date_mutation"] = pd.to_datetime(full_df["date_mutation"], errors="coerce")
     full_df["year"] = full_df["date_mutation"].dt.year
@@ -88,6 +96,51 @@ def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Da
         loyer_median=("prix_m2", "median"),
         loyer_minimum=("prix_m2", "min"),
         loyer_maximum=("prix_m2", "max"),
+=======
+    
+    # Process Year
+    full_df["date_mutation"] = pd.to_datetime(full_df["date_mutation"], errors="coerce")
+    full_df["year"] = full_df["date_mutation"].dt.year
+    
+    df_with_year = full_df[full_df["year"].notna()].copy()
+    df_no_year = full_df[full_df["year"].isna()].copy()
+    
+    if not df_no_year.empty:
+        dfs_to_concat = [df_with_year]
+        for y in TARGET_YEARS:
+            df_y = df_no_year.copy()
+            df_y["year"] = y
+            dfs_to_concat.append(df_y)
+        full_df = pd.concat(dfs_to_concat, ignore_index=True)
+    else:
+        full_df = df_with_year
+        
+    full_df["year"] = full_df["year"].astype(int)
+    full_df = full_df[full_df["year"].isin(TARGET_YEARS)].copy()
+    
+    # Attach IRIS and Arrondissement based on lon/lat
+    iris = load_paris_iris()
+    full_df = attach_iris_from_points(full_df, "longitude", "latitude", iris)
+    
+    # --- ARRONDISSEMENT LEVEL ---
+    grouped_arr = full_df.groupby(["arrondissement", "year"])["valeur_fonciere"].agg(
+        loyer_moyen="mean",
+        loyer_median="median",
+        loyer_minimum="min",
+        loyer_maximum="max"
+    ).reset_index()
+    
+    arrondissements = list(range(1, 21))
+    arr_years = pd.DataFrame(list(itertools.product(arrondissements, TARGET_YEARS)), columns=["arrondissement", "year"])
+    res_arr = arr_years.merge(grouped_arr, on=["arrondissement", "year"], how="left")
+    
+    # --- IRIS LEVEL ---
+    grouped_iris = full_df.groupby(["code_iris", "year"])["valeur_fonciere"].agg(
+        loyer_moyen="mean",
+        loyer_median="median",
+        loyer_minimum="min",
+        loyer_maximum="max"
+>>>>>>> Stashed changes
     ).reset_index()
 
     iris_global[["loyer_moyen", "loyer_median", "loyer_minimum", "loyer_maximum"]] = (
@@ -95,6 +148,7 @@ def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Da
     )
 
     iris_base = iris[["code_iris", "nom_iris", "arrondissement", "nom_com"]].drop_duplicates()
+<<<<<<< Updated upstream
     iris_global = iris_base.merge(iris_global, on="code_iris", how="left")
 
     # IRIS + YEAR
@@ -135,6 +189,25 @@ def main() -> None:
 
     path_iris = GOLD_DIR / "statistiques_loyer_iris.parquet"
     iris_global.to_parquet(path_iris, index=False)
+=======
+    
+    # Cross join IRIS with Years
+    iris_years = pd.merge(iris_base.assign(key=1), pd.DataFrame({"year": TARGET_YEARS, "key": 1}), on="key").drop("key", axis=1)
+    res_iris = iris_years.merge(grouped_iris, on=["code_iris", "year"], how="left")
+    
+    return res_arr, res_iris
+
+def main() -> None:
+    GOLD_DIR.mkdir(parents=True, exist_ok=True)
+    score_arr, score_iris = build_gold_scores()
+    
+    path_arr = GOLD_DIR / "statistiques_loyer_annee.parquet"
+    score_arr.to_parquet(path_arr, index=False)
+    print(f"Ecrit: {path_arr}")
+    
+    path_iris = GOLD_DIR / "statistiques_loyer_iris_annee.parquet"
+    score_iris.to_parquet(path_iris, index=False)
+>>>>>>> Stashed changes
     print(f"Ecrit: {path_iris}")
 
     path_iris_year = GOLD_DIR / "statistiques_loyer_iris_year.parquet"

@@ -142,6 +142,7 @@ function MapView({
     mapRef.current = map;
 
     map.on("load", async () => {
+<<<<<<< Updated upstream
       const [arrData, irisData, arrResponse, irisResponse] = await Promise.all([
         fetchArrondissements(selectedYearRef.current),
         fetchIrisScores(selectedYearRef.current),
@@ -150,6 +151,12 @@ function MapView({
       ]);
 
       arrDataRef.current = arrData;
+=======
+      const arrData = await fetchArrondissements(selectedYear);
+      arrDataRef.current = arrData;
+      
+      const irisData = await fetchIrisScores(selectedYear);
+>>>>>>> Stashed changes
       irisDataRef.current = irisData;
 
       const arrGeojsonRaw = await arrResponse.json();
@@ -424,6 +431,93 @@ function MapView({
       );
     });
   }, [selectedIndicator, selectedYear]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getSource("arrondissements")) return;
+
+    const updateData = async () => {
+      const arrData = await fetchArrondissements(selectedYear);
+      arrDataRef.current = arrData;
+      
+      const irisData = await fetchIrisScores(selectedYear);
+      irisDataRef.current = irisData;
+      
+      // Update Arrondissement Source
+      const arrResponse = await fetch("/data/arrondissements.geojson");
+      const arrGeojson = await arrResponse.json();
+
+      arrGeojson.features = arrGeojson.features.map((feature) => {
+        const arrNum = feature.properties.c_ar;
+        const data = arrData[arrNum] || {};
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            arrondissement: arrNum,
+            score: data[selectedIndicator] ?? 50,
+            quality: data.quality ?? 50,
+            culture: data.culture ?? 50,
+            services: data.services ?? 50,
+            transport: data.transport ?? 50,
+            prix_score: data.prix_score ?? 50,
+            loyer_median: data.loyer_median ?? 0,
+            loyer_moyen: data.loyer_moyen ?? 0,
+            loyer_maximum: data.loyer_maximum ?? 0,
+          },
+        };
+      });
+
+      map.getSource("arrondissements").setData(arrGeojson);
+      
+      // Update IRIS Source
+      if (map.getSource("iris")) {
+         const irisResponse = await fetch("/data/iris_paris.geojson");
+         const irisGeojson = await irisResponse.json();
+         irisGeojson.features = irisGeojson.features.map((feature) => {
+            const codeIris = feature.properties.code_iris;
+            const data = irisData[codeIris] || {};
+            return {
+              ...feature,
+              properties: {
+                ...feature.properties,
+                code_iris: codeIris,
+                score: data[selectedIndicator] ?? 50,
+                quality: data.quality ?? 50,
+                culture: data.culture ?? 50,
+                services: data.services ?? 50,
+                transport: data.transport ?? 50,
+                prix_score: data.prix_score ?? 50,
+                loyer_median: data.loyer_median ?? 0,
+                loyer_moyen: data.loyer_moyen ?? 0,
+                loyer_maximum: data.loyer_maximum ?? 0,
+              },
+            };
+         });
+         map.getSource("iris").setData(irisGeojson);
+      }
+      
+      // Update selected/compare zones
+      if (selectedZone) {
+        const isIris = !!selectedZone.code_iris;
+        const id = isIris ? selectedZone.code_iris : selectedZone.arrondissement;
+        const newData = isIris ? irisData[id] : arrData[id];
+        if (newData) {
+          setSelectedZone(isIris ? { ...newData, code_iris: id, nom_iris: selectedZone.nom_iris } : { ...newData, arrondissement: id, l_ar: selectedZone.l_ar });
+        }
+      }
+      if (compareZone) {
+        const isIris = !!compareZone.code_iris;
+        const id = isIris ? compareZone.code_iris : compareZone.arrondissement;
+        const newData = isIris ? irisData[id] : arrData[id];
+        if (newData) {
+          setCompareZone(isIris ? { ...newData, code_iris: id, nom_iris: compareZone.nom_iris } : { ...newData, arrondissement: id, l_ar: compareZone.l_ar });
+        }
+      }
+    };
+    
+    updateData();
+  }, [selectedYear]);
 
   return (
     <main className="map-section">

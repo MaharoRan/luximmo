@@ -4,6 +4,7 @@ import re
 import sys
 from pathlib import Path
 import pandas as pd
+import itertools
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
@@ -12,6 +13,8 @@ from utils.geo_helpers import load_paris_iris, attach_iris_from_points, extract_
 
 SILVER_DIR = REPO_ROOT / "Indicateur_2" / "silver"
 GOLD_DIR = REPO_ROOT / "Indicateur_2" / "gold"
+
+TARGET_YEARS = [2021, 2022, 2023, 2024, 2025]
 
 def _normalize_weights(series: pd.Series) -> pd.Series:
     maximum = series.max(skipna=True)
@@ -40,7 +43,27 @@ def _load_activities_scores() -> pd.DataFrame:
     df["arrondissement"] = df["arrondissement"].astype(int)
     df["event_weight"] = combined_text.apply(_score_event_weight)
 
-    grouped = df.groupby("arrondissement", as_index=False).agg(
+    # Process Year
+    df["date_start"] = pd.to_datetime(df["date_start"], errors="coerce")
+    df["year"] = df["date_start"].dt.year
+    
+    df_with_year = df[df["year"].notna()].copy()
+    df_no_year = df[df["year"].isna()].copy()
+    
+    if not df_no_year.empty:
+        dfs_to_concat = [df_with_year]
+        for y in TARGET_YEARS:
+            df_y = df_no_year.copy()
+            df_y["year"] = y
+            dfs_to_concat.append(df_y)
+        df = pd.concat(dfs_to_concat, ignore_index=True)
+    else:
+        df = df_with_year
+        
+    df["year"] = df["year"].astype(int)
+    df = df[df["year"].isin(TARGET_YEARS)].copy()
+
+    grouped = df.groupby(["arrondissement", "year"], as_index=False).agg(
         activities_count=("id", "count"),
         activities_weight=("event_weight", "sum"),
     )
@@ -103,20 +126,24 @@ def _load_tourism_scores(iris: pd.DataFrame, group_col: str) -> pd.DataFrame:
     return grouped
 
 def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) -> pd.DataFrame:
-    activities = _load_activities_scores() # only arrondissement
+    # Cross join base_df with TARGET_YEARS
+    base_years = pd.merge(base_df.assign(key=1), pd.DataFrame({"year": TARGET_YEARS, "key": 1}), on="key").drop("key", axis=1)
+
+    activities = _load_activities_scores() # has ['arrondissement', 'year']
     voirie = _load_voirie_activity_scores(iris, group_col)
     trees = _load_green_space_scores(iris, group_col)
     islands = _load_freshness_islands_scores(iris, group_col)
-    associations = _load_association_scores() # only arrondissement
+    associations = _load_association_scores() # has ['arrondissement']
     films = _load_film_scores(iris, group_col)
     tourism = _load_tourism_scores(iris, group_col)
 
-    score = base_df.copy()
-    # Merge arrondissement level data if necessary
-    score = score.merge(activities, on="arrondissement", how="left")
-    score = score.merge(associations, on="arrondissement", how="left")
+    score = base_years.copy()
     
-    # Merge grouped data
+    # Merge dynamic data (has year)
+    score = score.merge(activities, on=["arrondissement", "year"], how="left")
+    
+    # Merge static data (no year)
+    score = score.merge(associations, on="arrondissement", how="left")
     score = score.merge(voirie, on=group_col, how="left")
     score = score.merge(trees, on=group_col, how="left")
     score = score.merge(islands, on=group_col, how="left")
@@ -137,15 +164,19 @@ def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) ->
             score[column] = 0
         score[column] = score[column].fillna(0)
 
-    score["activities_norm"] = _normalize_weights(score["activities_raw"])
-    score["voirie_activity_norm"] = _normalize_weights(score["voirie_activity_raw"])
-    score["trees_norm"] = _normalize_weights(score["trees_raw"])
-    score["islands_norm"] = _normalize_weights(score["islands_raw"])
-    score["associations_norm"] = _normalize_weights(score["associations_raw"])
-    score["film_norm"] = _normalize_weights(score["film_raw"])
-    score["tourism_norm"] = _normalize_weights(score["tourism_raw"])
+    # Normalize per YEAR using groupby transform
+    for col, norm_col in [
+        ("activities_raw", "activities_norm"),
+        ("voirie_activity_raw", "voirie_activity_norm"),
+        ("trees_raw", "trees_norm"),
+        ("islands_raw", "islands_norm"),
+        ("associations_raw", "associations_norm"),
+        ("film_raw", "film_norm"),
+        ("tourism_raw", "tourism_norm")
+    ]:
+        score[norm_col] = score.groupby("year")[col].transform(_normalize_weights)
 
-    raw_final = (
+    score["raw_final"] = (
         0.60 * score["tourism_norm"]
         + 0.15 * score["activities_norm"]
         + 0.10 * score["voirie_activity_norm"]
@@ -155,14 +186,17 @@ def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) ->
         + 0.02 * score["islands_norm"]
     )
     
-    s_min = raw_final.min()
-    s_max = raw_final.max()
-    if s_max > s_min:
-        score["score_interet_culturel_loisir"] = (20 + 80 * (raw_final - s_min) / (s_max - s_min)).round(2)
-    else:
-        score["score_interet_culturel_loisir"] = 50.0
+    def calculate_score(group):
+        s_min = group.min()
+        s_max = group.max()
+        if s_max > s_min:
+            return (20 + 80 * (group - s_min) / (s_max - s_min)).round(2)
+        else:
+            return group * 0 + 50.0
 
-    score = score.sort_values("score_interet_culturel_loisir", ascending=False).reset_index(drop=True)
+    score["score_interet_culturel_loisir"] = score.groupby("year")["raw_final"].transform(calculate_score)
+
+    score = score.sort_values(["year", "score_interet_culturel_loisir"], ascending=[True, False]).reset_index(drop=True)
     return score
 
 def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -181,11 +215,11 @@ def main() -> None:
     GOLD_DIR.mkdir(parents=True, exist_ok=True)
     score_arr, score_iris = build_gold_scores()
     
-    path_arr = GOLD_DIR / "score_interet_culturel_loisir.parquet"
+    path_arr = GOLD_DIR / "score_interet_culturel_loisir_annee.parquet"
     score_arr.to_parquet(path_arr, index=False)
     print(f"Ecrit: {path_arr}")
     
-    path_iris = GOLD_DIR / "score_interet_culturel_loisir_iris.parquet"
+    path_iris = GOLD_DIR / "score_interet_culturel_loisir_iris_annee.parquet"
     score_iris.to_parquet(path_iris, index=False)
     print(f"Ecrit: {path_iris}")
 

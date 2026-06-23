@@ -271,11 +271,14 @@ function Sidebar({
     ((selectedZone.code_iris && !compareZone.code_iris) ||
       (!selectedZone.code_iris && compareZone.code_iris));
 
+  const years = [2021, 2022, 2023, 2024, 2025];
+
   return (
     <>
       <aside className="sidebar">
         <h1>LUXIMMO</h1>
 
+<<<<<<< Updated upstream
         <div className="card">
           <label>Indicateur</label>
           <select
@@ -310,6 +313,36 @@ function Sidebar({
             setCompareMode(true);
             setIsModalOpen(true);
           }}
+=======
+      <div className="card">
+        <label>Année</label>
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+          {years.map(year => (
+            <button
+              key={year}
+              onClick={() => setSelectedYear(year)}
+              style={{
+                flex: 1,
+                padding: '6px 0',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '12px',
+                background: selectedYear === year ? '#1f6f78' : '#e5e7eb',
+                color: selectedYear === year ? '#ffffff' : '#183247'
+              }}
+            >
+              {year}
+            </button>
+          ))}
+        </div>
+
+        <label>Indicateur</label>
+        <select
+          value={selectedIndicator}
+          onChange={(e) => setSelectedIndicator(e.target.value)}
+>>>>>>> Stashed changes
         >
           Comparer des zones
         </button>

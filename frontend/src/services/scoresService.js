@@ -1,11 +1,20 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+<<<<<<< Updated upstream
 export async function fetchScores(year = null) {
   const url = year
     ? `${API_URL}/api/scores?year=${year}`
     : `${API_URL}/api/scores`;
 
   const response = await fetch(url);
+=======
+/**
+ * Récupère les données agrégées par arrondissement depuis l'API.
+ * Retourne un objet indexé par numéro d'arrondissement.
+ */
+export async function fetchArrondissements(year = 2024) {
+  const response = await fetch(`${API_URL}/api/arrondissements?year=${year}`);
+>>>>>>> Stashed changes
 
   if (!response.ok) {
     throw new Error("Impossible de charger les scores depuis l’API");
@@ -16,8 +25,17 @@ export async function fetchScores(year = null) {
   return Object.fromEntries(data.map((item) => [item.code_iris, item]));
 }
 
+<<<<<<< Updated upstream
 export async function fetchAvailableYears() {
   const response = await fetch(`${API_URL}/api/years`);
+=======
+/**
+ * Récupère les données agrégées par IRIS depuis l'API.
+ * Retourne un objet indexé par code_iris.
+ */
+export async function fetchIrisScores(year = 2024) {
+  const response = await fetch(`${API_URL}/api/iris?year=${year}`);
+>>>>>>> Stashed changes
 
   if (!response.ok) {
     throw new Error("Impossible de charger les années");
