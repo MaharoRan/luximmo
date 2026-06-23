@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import RankingPanel from "./RankingPanel";
-import { fetchScores, getScoreFromData } from "../services/scoresService";
+import {
+  fetchScores,
+  getScoreFromData,
+} from "../services/scoresService";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 const indicatorLabels = {
@@ -16,7 +19,6 @@ function formatValue(value, indicator) {
   if (indicator === "price") {
     return `${Number(value).toLocaleString("fr-FR")} €/m²`;
   }
-
   return `${value} / 100`;
 }
 
@@ -25,7 +27,6 @@ function extendBounds(bounds, coordinates) {
     bounds.extend(coordinates);
     return;
   }
-
   coordinates.forEach((coord) => extendBounds(bounds, coord));
 }
 
@@ -57,6 +58,7 @@ function getColorScale(indicator) {
 
 function MapView({
   selectedIndicator,
+  selectedYear,
   compareMode,
   compareTarget,
   setSelectedZone,
@@ -94,7 +96,7 @@ function MapView({
     mapRef.current = map;
 
     map.on("load", async () => {
-      const scores = await fetchScores();
+      const scores = await fetchScores(selectedYear);
       scoresRef.current = scores;
 
       map.addSource("arrondissements", {
@@ -278,29 +280,38 @@ function MapView({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.getSource("iris")) return;
+    if (!map || !map.getSource("iris") || !selectedYear) return;
 
     selectedIndicatorRef.current = selectedIndicator;
 
-    fetch("/data/iris_paris.geojson")
-      .then((res) => res.json())
-      .then((geojson) => {
-        geojson.features = geojson.features.map((feature) => ({
-          ...feature,
-          properties: {
-            ...feature.properties,
-            score: getScoreFromData(
-              scoresRef.current,
-              feature.properties.code_iris,
-              selectedIndicator
-            ),
-          },
-        }));
+    fetchScores(selectedYear).then((scores) => {
+      scoresRef.current = scores;
 
-        map.getSource("iris").setData(geojson);
-        map.setPaintProperty("iris-fill", "fill-color", getColorScale(selectedIndicator));
-      });
-  }, [selectedIndicator]);
+      fetch("/data/iris_paris.geojson")
+        .then((res) => res.json())
+        .then((geojson) => {
+          geojson.features = geojson.features.map((feature) => ({
+            ...feature,
+            properties: {
+              ...feature.properties,
+              score: getScoreFromData(
+                scoresRef.current,
+                feature.properties.code_iris,
+                selectedIndicator
+              ),
+            },
+          }));
+
+          map.getSource("iris").setData(geojson);
+
+          map.setPaintProperty(
+            "iris-fill",
+            "fill-color",
+            getColorScale(selectedIndicator)
+          );
+        });
+    });
+  }, [selectedIndicator, selectedYear]);
 
   return (
     <main className="map-section">

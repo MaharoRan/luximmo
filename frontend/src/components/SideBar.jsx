@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { fetchScores, getScoreFromData } from "../services/scoresService";
+import {
+  fetchScores,
+  fetchAvailableYears,
+  getScoreFromData,
+} from "../services/scoresService";
 
 const indicators = [
   { id: "quality", label: "Qualité de vie" },
@@ -50,32 +54,15 @@ function ScoreRows({ scoresByIris, zone }) {
 
 function PriceBlock({ scoresByIris, zone }) {
   const zoneData = getZoneData(scoresByIris, zone);
-
   if (!zoneData) return null;
 
   return (
     <div className="price-block">
       <h4>Marché immobilier</h4>
-
-      <p>
-        Prix médian
-        <b>{formatEuro(zoneData.prix_m2_median)} / m²</b>
-      </p>
-
-      <p>
-        Prix moyen
-        <b>{formatEuro(zoneData.prix_m2_mean)} / m²</b>
-      </p>
-
-      <p>
-        Transactions
-        <b>{zoneData.transactions_count || "—"}</b>
-      </p>
-
-      <p>
-        Année
-        <b>{zoneData.year || "—"}</b>
-      </p>
+      <p>Prix médian <b>{formatEuro(zoneData.prix_m2_median)} / m²</b></p>
+      <p>Prix moyen <b>{formatEuro(zoneData.prix_m2_mean)} / m²</b></p>
+      <p>Transactions <b>{zoneData.transactions_count || "—"}</b></p>
+      <p>Année <b>{zoneData.year || "—"}</b></p>
     </div>
   );
 }
@@ -83,6 +70,8 @@ function PriceBlock({ scoresByIris, zone }) {
 function Sidebar({
   selectedIndicator,
   setSelectedIndicator,
+  selectedYear,
+  setSelectedYear,
   selectedZone,
   compareZone,
   compareMode,
@@ -93,10 +82,21 @@ function Sidebar({
   setCompareZone,
 }) {
   const [scoresByIris, setScoresByIris] = useState({});
+  const [availableYears, setAvailableYears] = useState([]);
 
   useEffect(() => {
-    fetchScores().then(setScoresByIris);
+    fetchAvailableYears().then((years) => {
+      setAvailableYears(years);
+      if (!selectedYear && years.length > 0) {
+        setSelectedYear(years[years.length - 1]);
+      }
+    });
   }, []);
+
+  useEffect(() => {
+    if (!selectedYear) return;
+    fetchScores(selectedYear).then(setScoresByIris);
+  }, [selectedYear]);
 
   const currentIndicator = indicators.find((i) => i.id === selectedIndicator);
 
@@ -120,6 +120,20 @@ function Sidebar({
           {indicators.map((indicator) => (
             <option key={indicator.id} value={indicator.id}>
               {indicator.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="card">
+        <label>Année</label>
+        <select
+          value={selectedYear || ""}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
+        >
+          {availableYears.map((year) => (
+            <option key={year} value={year}>
+              {year}
             </option>
           ))}
         </select>
@@ -164,18 +178,15 @@ function Sidebar({
       </button>
 
       <div className="kpi-card">
-  <strong>
-    {score
-      ? selectedIndicator === "price"
-        ? `${Number(score).toLocaleString("fr-FR")} €/m²`
-        : `${score} / 100`
-      : "—"}
-  </strong>
-
-  <span>
-    {selectedZone ? currentIndicator.label : "Score zone"}
-  </span>
-</div>
+        <strong>
+          {score
+            ? selectedIndicator === "price"
+              ? `${Number(score).toLocaleString("fr-FR")} €/m²`
+              : `${score} / 100`
+            : "—"}
+        </strong>
+        <span>{selectedZone ? currentIndicator.label : "Score zone"}</span>
+      </div>
 
       {selectedZone ? (
         <div className="zone-card">
@@ -184,11 +195,9 @@ function Sidebar({
           <p>Code IRIS : {selectedZone.code_iris}</p>
 
           <hr />
-
           <PriceBlock scoresByIris={scoresByIris} zone={selectedZone} />
 
           <hr />
-
           <h4>Score global LuxImmo</h4>
           <strong className="global-score">
             {getGlobalScore(scoresByIris, selectedZone)} / 100
@@ -219,13 +228,15 @@ function Sidebar({
 
           {selectedZone && compareZone && (
             <div className="compare-table">
-              {indicators.map((indicator) => (
-                <div className="compare-row" key={indicator.id}>
-                  <span>{indicator.label}</span>
-                  <b>{getScoreFromData(scoresByIris, selectedZone.code_iris, indicator.id)}</b>
-                  <b>{getScoreFromData(scoresByIris, compareZone.code_iris, indicator.id)}</b>
-                </div>
-              ))}
+              {indicators
+                .filter((indicator) => indicator.id !== "price")
+                .map((indicator) => (
+                  <div className="compare-row" key={indicator.id}>
+                    <span>{indicator.label}</span>
+                    <b>{getScoreFromData(scoresByIris, selectedZone.code_iris, indicator.id)}</b>
+                    <b>{getScoreFromData(scoresByIris, compareZone.code_iris, indicator.id)}</b>
+                  </div>
+                ))}
 
               <div className="compare-row global">
                 <span>Global</span>

@@ -5,6 +5,7 @@ import "./App.css";
 
 function App() {
   const [selectedIndicator, setSelectedIndicator] = useState("quality");
+  const [selectedYear, setSelectedYear] = useState(null);
   const [selectedZone, setSelectedZone] = useState(null);
   const [compareZone, setCompareZone] = useState(null);
   const [compareMode, setCompareMode] = useState(false);
@@ -15,6 +16,8 @@ function App() {
       <Sidebar
         selectedIndicator={selectedIndicator}
         setSelectedIndicator={setSelectedIndicator}
+        selectedYear={selectedYear}
+        setSelectedYear={setSelectedYear}
         selectedZone={selectedZone}
         compareZone={compareZone}
         compareMode={compareMode}
@@ -27,6 +30,7 @@ function App() {
 
       <MapView
         selectedIndicator={selectedIndicator}
+        selectedYear={selectedYear}
         compareMode={compareMode}
         compareTarget={compareTarget}
         setSelectedZone={setSelectedZone}
