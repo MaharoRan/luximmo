@@ -322,7 +322,10 @@ function MapView({
 
       <div ref={mapContainer} className="map-container" />
 
-      <RankingPanel selectedIndicator={selectedIndicator} />
+      <RankingPanel
+  selectedIndicator={selectedIndicator}
+  selectedYear={selectedYear}
+/>
     </main>
   );
 }
