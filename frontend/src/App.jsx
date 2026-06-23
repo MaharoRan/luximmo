@@ -1,5 +1,5 @@
 import { useState } from "react";
-import Sidebar from "./components/Sidebar";
+import Sidebar from "./components/SideBar";
 import MapView from "./components/MapView";
 import "./App.css";
 
@@ -33,6 +33,7 @@ function App() {
         selectedYear={selectedYear}
         compareMode={compareMode}
         compareTarget={compareTarget}
+        selectedZone={selectedZone}
         setSelectedZone={setSelectedZone}
         setCompareZone={setCompareZone}
       />

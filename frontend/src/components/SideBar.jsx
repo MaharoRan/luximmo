@@ -1,68 +1,157 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  fetchScores,
   fetchAvailableYears,
-  getScoreFromData,
+  formatEuro,
 } from "../services/scoresService";
 
 const indicators = [
+  { id: "prix_score", label: "Prix immobilier" },
   { id: "quality", label: "Qualité de vie" },
   { id: "culture", label: "Culture & loisirs" },
   { id: "services", label: "Services publics" },
   { id: "transport", label: "Transports" },
-  { id: "price", label: "Prix immobilier" },
 ];
 
-function formatEuro(value) {
-  if (!value) return "—";
-  return `${Number(value).toLocaleString("fr-FR")} €`;
+const scoreIndicators = indicators.filter((indicator) => indicator.id !== "prix_score");
+
+const indicatorDetails = {
+  quality: [
+    { key: "q_trees_count", label: "Arbres", unit: "" },
+    { key: "q_islands_count", label: "Îlots de fraîcheur", unit: "" },
+    { key: "q_islands_equip_count", label: "Îlots équipés", unit: "" },
+    { key: "q_sanisettes_count", label: "Sanisettes", unit: "" },
+    { key: "q_zones_tourism", label: "Zones touristiques", unit: "" },
+  ],
+  culture: [
+    { key: "c_activities_count", label: "Activités culturelles", unit: "" },
+    { key: "c_associations_count", label: "Associations", unit: "" },
+    { key: "c_film_locations", label: "Lieux de tournage", unit: "" },
+    { key: "c_trees_count", label: "Arbres", unit: "" },
+    { key: "c_islands_count", label: "Espaces verts", unit: "" },
+    { key: "c_tourism_zones", label: "Zones touristiques", unit: "" },
+  ],
+  services: [
+    { key: "s_hopitaux_count", label: "Hôpitaux", unit: "" },
+    { key: "s_ecoles_count", label: "Écoles", unit: "" },
+    { key: "s_pharmacies_count", label: "Pharmacies", unit: "" },
+    { key: "s_police_count", label: "Commissariats", unit: "" },
+    { key: "s_postes_count", label: "Bureaux de poste", unit: "" },
+    { key: "s_biblio_count", label: "Bibliothèques", unit: "" },
+  ],
+  transport: [
+    { key: "t_gare_stations", label: "Gares / stations", unit: "" },
+    { key: "t_velib_stations", label: "Stations Vélib'", unit: "" },
+    { key: "t_velib_capacity", label: "Places Vélib'", unit: "" },
+    { key: "t_transport_segments", label: "Voirie", unit: "" },
+  ],
+  prix_score: [
+    { key: "loyer_moyen", label: "Prix moyen", unit: "€" },
+    { key: "loyer_median", label: "Prix médian", unit: "€" },
+    { key: "loyer_maximum", label: "Prix maximum", unit: "€" },
+  ],
+};
+
+function arrLabel(zone) {
+  if (!zone) return "Non sélectionné";
+  if (zone.nom_iris) return zone.nom_iris;
+  return zone.l_ar || `${zone.arrondissement}e Arrondissement`;
 }
 
-function getZoneData(scoresByIris, zone) {
+function getGlobalScore(zone) {
   if (!zone) return null;
-  return scoresByIris?.[zone.code_iris] ?? null;
-}
-
-function getGlobalScore(scoresByIris, zone) {
-  if (!zone) return null;
-
-  const quality = getScoreFromData(scoresByIris, zone.code_iris, "quality");
-  const culture = getScoreFromData(scoresByIris, zone.code_iris, "culture");
-  const services = getScoreFromData(scoresByIris, zone.code_iris, "services");
-  const transport = getScoreFromData(scoresByIris, zone.code_iris, "transport");
 
   return (
-    quality * 0.3 +
-    culture * 0.2 +
-    services * 0.25 +
-    transport * 0.25
-  ).toFixed(2);
+    (zone.quality ?? 50) * 0.2 +
+    (zone.culture ?? 50) * 0.2 +
+    (zone.services ?? 50) * 0.2 +
+    (zone.transport ?? 50) * 0.2 +
+    (zone.prix_score ?? 50) * 0.2
+  ).toFixed(1);
 }
 
-function ScoreRows({ scoresByIris, zone }) {
+function getCompareClass(valA, valB, lowerIsBetter = false) {
+  if (valA == null || valB == null || valA === "—" || valB === "—") return "";
+
+  const numA = Number(valA);
+  const numB = Number(valB);
+
+  if (Number.isNaN(numA) || Number.isNaN(numB) || numA === numB) return "";
+
+  if (lowerIsBetter) {
+    return numA < numB ? "better-score" : "worse-score";
+  }
+
+  return numA > numB ? "better-score" : "worse-score";
+}
+
+function formatDetailValue(value, unit) {
+  if (value == null) return "–";
+  if (unit === "€") return formatEuro(value);
+
+  if (typeof value === "number") {
+    return Number.isInteger(value)
+      ? value.toLocaleString("fr-FR")
+      : value.toFixed(1);
+  }
+
+  return value;
+}
+
+function ScoreRows({ zone }) {
   if (!zone) return null;
 
   return (
     <div className="score-list">
-      <p>Qualité de vie <b>{getScoreFromData(scoresByIris, zone.code_iris, "quality")} / 100</b></p>
-      <p>Culture & loisirs <b>{getScoreFromData(scoresByIris, zone.code_iris, "culture")} / 100</b></p>
-      <p>Services publics <b>{getScoreFromData(scoresByIris, zone.code_iris, "services")} / 100</b></p>
-      <p>Transports <b>{getScoreFromData(scoresByIris, zone.code_iris, "transport")} / 100</b></p>
+      {scoreIndicators.map((indicator) => (
+        <p key={indicator.id}>
+          {indicator.label}
+          <b>{zone[indicator.id] ?? 50} / 100</b>
+        </p>
+      ))}
     </div>
   );
 }
 
-function PriceBlock({ scoresByIris, zone }) {
-  const zoneData = getZoneData(scoresByIris, zone);
-  if (!zoneData) return null;
+function PrixBlock({ zone }) {
+  if (!zone) return null;
 
   return (
-    <div className="price-block">
-      <h4>Marché immobilier</h4>
-      <p>Prix médian <b>{formatEuro(zoneData.prix_m2_median)} / m²</b></p>
-      <p>Prix moyen <b>{formatEuro(zoneData.prix_m2_mean)} / m²</b></p>
-      <p>Transactions <b>{zoneData.transactions_count || "—"}</b></p>
-      <p>Année <b>{zoneData.year || "—"}</b></p>
+    <div className="prix-block">
+      <div className="prix-row">
+        <span>Prix moyen</span>
+        <b>{formatEuro(zone.loyer_moyen)}</b>
+      </div>
+
+      <div className="prix-row">
+        <span>Prix médian</span>
+        <b>{formatEuro(zone.loyer_median)}</b>
+      </div>
+
+      <div className="prix-row">
+        <span>Prix maximum</span>
+        <b>{formatEuro(zone.loyer_maximum)}</b>
+      </div>
+    </div>
+  );
+}
+
+function IndicatorDetails({ zone, indicator }) {
+  if (!zone) return null;
+
+  const details = indicatorDetails[indicator];
+
+  if (!details) return null;
+
+  return (
+    <div className="detail-block">
+      <h4>Détails — {indicators.find((item) => item.id === indicator)?.label}</h4>
+
+      {details.map((detail) => (
+        <div className="detail-row" key={detail.key}>
+          <span>{detail.label}</span>
+          <b>{formatDetailValue(zone[detail.key], detail.unit)}</b>
+        </div>
+      ))}
     </div>
   );
 }
@@ -81,12 +170,24 @@ function Sidebar({
   setSelectedZone,
   setCompareZone,
 }) {
-  const [scoresByIris, setScoresByIris] = useState({});
   const [availableYears, setAvailableYears] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isWaitingForMapClick, setIsWaitingForMapClick] = useState(false);
+
+  const [modalPos, setModalPos] = useState({
+    x: window.innerWidth / 2 - 225,
+    y: 100,
+  });
+
+  const draggingRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+
+  const currentIndicator = indicators.find((item) => item.id === selectedIndicator);
 
   useEffect(() => {
     fetchAvailableYears().then((years) => {
       setAvailableYears(years);
+
       if (!selectedYear && years.length > 0) {
         setSelectedYear(years[years.length - 1]);
       }
@@ -94,172 +195,365 @@ function Sidebar({
   }, []);
 
   useEffect(() => {
-    if (!selectedYear) return;
-    fetchScores(selectedYear).then(setScoresByIris);
-  }, [selectedYear]);
+    if (isWaitingForMapClick) {
+      setIsWaitingForMapClick(false);
+    }
+  }, [
+    selectedZone?.arrondissement,
+    selectedZone?.code_iris,
+    compareZone?.arrondissement,
+    compareZone?.code_iris,
+  ]);
 
-  const currentIndicator = indicators.find((i) => i.id === selectedIndicator);
+  const handlePointerDown = (event) => {
+    draggingRef.current = true;
+    dragOffsetRef.current = {
+      x: event.clientX - modalPos.x,
+      y: event.clientY - modalPos.y,
+    };
+    event.target.setPointerCapture(event.pointerId);
+  };
 
-  const score = selectedZone
-    ? getScoreFromData(scoresByIris, selectedZone.code_iris, selectedIndicator)
+  const handlePointerMove = (event) => {
+    if (!draggingRef.current) return;
+
+    setModalPos({
+      x: event.clientX - dragOffsetRef.current.x,
+      y: event.clientY - dragOffsetRef.current.y,
+    });
+  };
+
+  const handlePointerUp = (event) => {
+    draggingRef.current = false;
+    event.target.releasePointerCapture(event.pointerId);
+  };
+
+  const displayScore = selectedZone
+    ? selectedIndicator === "prix_score"
+      ? formatEuro(selectedZone.loyer_median)
+      : `${selectedZone[selectedIndicator] ?? 50} / 100`
     : null;
 
-  const selectedZoneData = getZoneData(scoresByIris, selectedZone);
-  const compareZoneData = getZoneData(scoresByIris, compareZone);
+  const isMismatch =
+    selectedZone &&
+    compareZone &&
+    ((selectedZone.code_iris && !compareZone.code_iris) ||
+      (!selectedZone.code_iris && compareZone.code_iris));
 
   return (
-    <aside className="sidebar">
-      <h1>LUXIMMO</h1>
+    <>
+      <aside className="sidebar">
+        <h1>LUXIMMO</h1>
 
-      <div className="card">
-        <label>Indicateur</label>
-        <select
-          value={selectedIndicator}
-          onChange={(e) => setSelectedIndicator(e.target.value)}
+        <div className="card">
+          <label>Indicateur</label>
+          <select
+            value={selectedIndicator}
+            onChange={(event) => setSelectedIndicator(event.target.value)}
+          >
+            {indicators.map((indicator) => (
+              <option key={indicator.id} value={indicator.id}>
+                {indicator.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="card">
+          <label>Année</label>
+          <select
+            value={selectedYear || ""}
+            onChange={(event) => setSelectedYear(Number(event.target.value))}
+          >
+            {availableYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          className={compareMode ? "compare-btn active" : "compare-btn"}
+          onClick={() => {
+            setCompareMode(true);
+            setIsModalOpen(true);
+          }}
         >
-          {indicators.map((indicator) => (
-            <option key={indicator.id} value={indicator.id}>
-              {indicator.label}
-            </option>
-          ))}
-        </select>
-      </div>
+          Comparer des zones
+        </button>
 
-      <div className="card">
-        <label>Année</label>
-        <select
-          value={selectedYear || ""}
-          onChange={(e) => setSelectedYear(Number(e.target.value))}
+        <button
+          className="reset-btn"
+          onClick={() => {
+            setSelectedZone(null);
+            setCompareZone(null);
+          }}
         >
-          {availableYears.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-      </div>
+          Réinitialiser
+        </button>
 
-      <button
-        className={compareMode ? "compare-btn active" : "compare-btn"}
-        onClick={() => setCompareMode(!compareMode)}
-      >
-        {compareMode ? "Mode comparaison activé" : "Activer comparaison"}
-      </button>
+        <div className="kpi-card">
+          <strong>{displayScore || "—"}</strong>
+          <span>{selectedZone ? currentIndicator.label : "Score zone"}</span>
+        </div>
 
-      {compareMode && (
-        <div className="compare-target">
-          <p>Sélection à modifier :</p>
-          <div className="target-buttons">
-            <button
-              className={compareTarget === "A" ? "active" : ""}
-              onClick={() => setCompareTarget("A")}
+        {selectedZone ? (
+          <div className="zone-card">
+            <h3>{arrLabel(selectedZone)}</h3>
+
+            <hr />
+
+            <h4>Score global LuxImmo</h4>
+            <strong className="global-score">
+              {getGlobalScore(selectedZone)} / 100
+            </strong>
+
+            <ScoreRows zone={selectedZone} />
+
+            <hr />
+
+            <h4>Prix immobilier</h4>
+            <PrixBlock zone={selectedZone} />
+
+            <hr />
+
+            <IndicatorDetails zone={selectedZone} indicator={selectedIndicator} />
+          </div>
+        ) : (
+          <div className="zone-card">
+            <h3>Aucune zone sélectionnée</h3>
+            <p>Clique sur un arrondissement ou un IRIS de la carte.</p>
+          </div>
+        )}
+      </aside>
+
+      {isModalOpen && !isWaitingForMapClick && (
+        <div
+          className="modal-content"
+          style={{ left: modalPos.x, top: modalPos.y }}
+        >
+          <div
+            className="modal-header"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
+            <h2>Comparer des zones</h2>
+          </div>
+
+          <div className="modal-body">
+            <div className="target-buttons" style={{ display: "flex", gap: "8px" }}>
+              <button
+                className={compareTarget === "A" ? "active" : ""}
+                onClick={() => {
+                  setCompareTarget("A");
+                  setIsWaitingForMapClick(true);
+                }}
+              >
+                Cible clic : Zone A
+              </button>
+
+              <button
+                className={compareTarget === "B" ? "active" : ""}
+                onClick={() => {
+                  setCompareTarget("B");
+                  setIsWaitingForMapClick(true);
+                }}
+              >
+                Cible clic : Zone B
+              </button>
+            </div>
+
+            <small
+              style={{
+                display: "block",
+                marginTop: "8px",
+                marginBottom: "16px",
+                color: "#64748b",
+              }}
             >
-              Zone A
-            </button>
-            <button
-              className={compareTarget === "B" ? "active" : ""}
-              onClick={() => setCompareTarget("B")}
-            >
-              Zone B
-            </button>
-          </div>
-          <small>Clique sur la carte pour choisir la zone sélectionnée.</small>
-        </div>
-      )}
+              Cliquez sur un bouton cible puis sélectionnez une zone sur la carte.
+            </small>
 
-      <button
-        className="reset-btn"
-        onClick={() => {
-          setSelectedZone(null);
-          setCompareZone(null);
-        }}
-      >
-        Réinitialiser
-      </button>
+            {isMismatch && (
+              <div
+                style={{
+                  padding: "12px",
+                  background: "#fee2e2",
+                  color: "#b91c1c",
+                  borderRadius: "6px",
+                  marginBottom: "16px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  textAlign: "center",
+                }}
+              >
+                Impossible de comparer un arrondissement avec un quartier IRIS.
+              </div>
+            )}
 
-      <div className="kpi-card">
-        <strong>
-          {score
-            ? selectedIndicator === "price"
-              ? `${Number(score).toLocaleString("fr-FR")} €/m²`
-              : `${score} / 100`
-            : "—"}
-        </strong>
-        <span>{selectedZone ? currentIndicator.label : "Score zone"}</span>
-      </div>
-
-      {selectedZone ? (
-        <div className="zone-card">
-          <h3>{selectedZone.nom_iris}</h3>
-          <p>Commune : {selectedZone.nom_com}</p>
-          <p>Code IRIS : {selectedZone.code_iris}</p>
-
-          <hr />
-          <PriceBlock scoresByIris={scoresByIris} zone={selectedZone} />
-
-          <hr />
-          <h4>Score global LuxImmo</h4>
-          <strong className="global-score">
-            {getGlobalScore(scoresByIris, selectedZone)} / 100
-          </strong>
-
-          <ScoreRows scoresByIris={scoresByIris} zone={selectedZone} />
-        </div>
-      ) : (
-        <div className="zone-card">
-          <h3>Aucune zone sélectionnée</h3>
-          <p>Clique sur une zone IRIS de la carte.</p>
-        </div>
-      )}
-
-      {compareMode && (
-        <div className="compare-card">
-          <h3>Comparaison</h3>
-
-          <div className="compare-column">
-            <h4>Zone A</h4>
-            <p>{selectedZone ? selectedZone.nom_iris : "Non sélectionnée"}</p>
-          </div>
-
-          <div className="compare-column">
-            <h4>Zone B</h4>
-            <p>{compareZone ? compareZone.nom_iris : "Non sélectionnée"}</p>
-          </div>
-
-          {selectedZone && compareZone && (
             <div className="compare-table">
-              {indicators
-                .filter((indicator) => indicator.id !== "price")
-                .map((indicator) => (
+              <div
+                className="compare-row"
+                style={{
+                  borderBottom: "none",
+                  paddingBottom: "16px",
+                  alignItems: "stretch",
+                }}
+              >
+                <span />
+
+                <div
+                  className="compare-column"
+                  style={{
+                    margin: 0,
+                    padding: "10px",
+                    borderRadius: "6px",
+                    background: selectedZone ? "#f6f3ee" : "#e5e7eb",
+                    color: selectedZone ? "inherit" : "#9ca3af",
+                  }}
+                >
+                  <h4 style={{ margin: 0, fontSize: "13px" }}>
+                    {selectedZone ? arrLabel(selectedZone) : "Zone A"}
+                  </h4>
+                </div>
+
+                <div
+                  className="compare-column"
+                  style={{
+                    margin: 0,
+                    padding: "10px",
+                    borderRadius: "6px",
+                    background: compareZone ? "#f6f3ee" : "#e5e7eb",
+                    color: compareZone ? "inherit" : "#9ca3af",
+                  }}
+                >
+                  <h4 style={{ margin: 0, fontSize: "13px" }}>
+                    {compareZone ? arrLabel(compareZone) : "Zone B"}
+                  </h4>
+                </div>
+              </div>
+
+              {scoreIndicators.map((indicator) => {
+                const valA = selectedZone ? selectedZone[indicator.id] ?? 50 : "—";
+                const valB = compareZone ? compareZone[indicator.id] ?? 50 : "—";
+
+                return (
                   <div className="compare-row" key={indicator.id}>
                     <span>{indicator.label}</span>
-                    <b>{getScoreFromData(scoresByIris, selectedZone.code_iris, indicator.id)}</b>
-                    <b>{getScoreFromData(scoresByIris, compareZone.code_iris, indicator.id)}</b>
+                    <b className={isMismatch ? "" : getCompareClass(valA, valB)}>
+                      {valA}
+                    </b>
+                    <b className={isMismatch ? "" : getCompareClass(valB, valA)}>
+                      {valB}
+                    </b>
                   </div>
-                ))}
+                );
+              })}
+
+              <div className="compare-row">
+                <span>Prix moyen</span>
+                <b
+                  className={
+                    isMismatch
+                      ? ""
+                      : getCompareClass(
+                          selectedZone?.loyer_moyen,
+                          compareZone?.loyer_moyen,
+                          true
+                        )
+                  }
+                >
+                  {selectedZone ? formatEuro(selectedZone.loyer_moyen) : "—"}
+                </b>
+                <b
+                  className={
+                    isMismatch
+                      ? ""
+                      : getCompareClass(
+                          compareZone?.loyer_moyen,
+                          selectedZone?.loyer_moyen,
+                          true
+                        )
+                  }
+                >
+                  {compareZone ? formatEuro(compareZone.loyer_moyen) : "—"}
+                </b>
+              </div>
+
+              <div className="compare-row">
+                <span>Prix médian</span>
+                <b
+                  className={
+                    isMismatch
+                      ? ""
+                      : getCompareClass(
+                          selectedZone?.loyer_median,
+                          compareZone?.loyer_median,
+                          true
+                        )
+                  }
+                >
+                  {selectedZone ? formatEuro(selectedZone.loyer_median) : "—"}
+                </b>
+                <b
+                  className={
+                    isMismatch
+                      ? ""
+                      : getCompareClass(
+                          compareZone?.loyer_median,
+                          selectedZone?.loyer_median,
+                          true
+                        )
+                  }
+                >
+                  {compareZone ? formatEuro(compareZone.loyer_median) : "—"}
+                </b>
+              </div>
 
               <div className="compare-row global">
                 <span>Global</span>
-                <b>{getGlobalScore(scoresByIris, selectedZone)}</b>
-                <b>{getGlobalScore(scoresByIris, compareZone)}</b>
-              </div>
-
-              <div className="compare-row">
-                <span>Prix médian €/m²</span>
-                <b>{formatEuro(selectedZoneData?.prix_m2_median)}</b>
-                <b>{formatEuro(compareZoneData?.prix_m2_median)}</b>
-              </div>
-
-              <div className="compare-row">
-                <span>Transactions</span>
-                <b>{selectedZoneData?.transactions_count || "—"}</b>
-                <b>{compareZoneData?.transactions_count || "—"}</b>
+                <b
+                  className={
+                    isMismatch
+                      ? ""
+                      : getCompareClass(
+                          getGlobalScore(selectedZone),
+                          getGlobalScore(compareZone)
+                        )
+                  }
+                >
+                  {selectedZone ? getGlobalScore(selectedZone) : "—"}
+                </b>
+                <b
+                  className={
+                    isMismatch
+                      ? ""
+                      : getCompareClass(
+                          getGlobalScore(compareZone),
+                          getGlobalScore(selectedZone)
+                        )
+                  }
+                >
+                  {compareZone ? getGlobalScore(compareZone) : "—"}
+                </b>
               </div>
             </div>
-          )}
+
+            <div className="modal-actions">
+              <button
+                className="cancel-btn"
+                onClick={() => setIsModalOpen(false)}
+              >
+                Fermer la comparaison
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </aside>
+    </>
   );
 }
 

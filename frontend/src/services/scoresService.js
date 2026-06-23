@@ -11,11 +11,9 @@ export async function fetchScores(year = null) {
     throw new Error("Impossible de charger les scores depuis l’API");
   }
 
-  const scores = await response.json();
+  const data = await response.json();
 
-  return Object.fromEntries(
-    scores.map((item) => [item.code_iris, item])
-  );
+  return Object.fromEntries(data.map((item) => [item.code_iris, item]));
 }
 
 export async function fetchAvailableYears() {
@@ -29,6 +27,37 @@ export async function fetchAvailableYears() {
   return data.years;
 }
 
+export async function fetchArrondissements(year = null) {
+  const url = year
+    ? `${API_URL}/api/arrondissements?year=${year}`
+    : `${API_URL}/api/arrondissements`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error("Impossible de charger les arrondissements depuis l’API");
+  }
+
+  const data = await response.json();
+
+  return Object.fromEntries(data.map((item) => [item.arrondissement, item]));
+}
+
+export async function fetchIrisScores(year = null) {
+  const url = year
+    ? `${API_URL}/api/iris?year=${year}`
+    : `${API_URL}/api/iris`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error("Impossible de charger les données IRIS depuis l’API");
+  }
+
+  const data = await response.json();
+
+  return Object.fromEntries(data.map((item) => [item.code_iris, item]));
+}
 
 export function getScoreFromData(scoresByIris, codeIris, indicator) {
   const zone = scoresByIris?.[codeIris];
@@ -39,5 +68,25 @@ export function getScoreFromData(scoresByIris, codeIris, indicator) {
     return zone.prix_m2_median ?? 0;
   }
 
+  if (indicator === "prix_score") {
+    return zone.prix_score ?? 50;
+  }
+
   return zone[indicator] ?? 50;
+}
+
+export function getArrScore(arrData, arrNum, indicator) {
+  const zone = arrData?.[arrNum];
+  if (!zone) return 50;
+  return zone[indicator] ?? 50;
+}
+
+export function formatEuro(value) {
+  if (value == null || value === 0) return "–";
+
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(value);
 }

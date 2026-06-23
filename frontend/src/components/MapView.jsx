@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import RankingPanel from "./RankingPanel";
 import {
-  fetchScores,
-  getScoreFromData,
+  fetchArrondissements,
+  fetchIrisScores,
+  formatEuro,
 } from "../services/scoresService";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -12,48 +13,87 @@ const indicatorLabels = {
   culture: "Culture & loisirs",
   services: "Services publics",
   transport: "Transports",
-  price: "Prix immobilier",
+  prix_score: "Prix immobilier",
 };
 
-function formatValue(value, indicator) {
-  if (indicator === "price") {
-    return `${Number(value).toLocaleString("fr-FR")} €/m²`;
-  }
-  return `${value} / 100`;
-}
+const SCORE_COLORS = [
+  0, "#d32f2f",
+  25, "#ef6c00",
+  50, "#fbc02d",
+  75, "#66bb6a",
+  100, "#2e7d32",
+];
 
 function extendBounds(bounds, coordinates) {
   if (typeof coordinates[0] === "number") {
     bounds.extend(coordinates);
     return;
   }
+
   coordinates.forEach((coord) => extendBounds(bounds, coord));
 }
 
-function getColorScale(indicator) {
-  if (indicator === "price") {
-    return [
-      "interpolate",
-      ["linear"],
-      ["get", "score"],
-      7000, "#f4f4f4",
-      9000, "#b7e4c7",
-      11000, "#74c69d",
-      13000, "#2a9d8f",
-      16000, "#264653",
-    ];
+function getTooltipValue(properties, indicator) {
+  if (indicator === "prix_score") {
+    return `${formatEuro(properties.loyer_median)} médian`;
   }
 
-  return [
-    "interpolate",
-    ["linear"],
-    ["get", "score"],
-    0, "#f4f4f4",
-    25, "#b7e4c7",
-    50, "#74c69d",
-    75, "#2a9d8f",
-    100, "#264653",
-  ];
+  const score = properties[indicator] ?? properties.score ?? "–";
+  return `${score} / 100`;
+}
+
+function enrichArrondissementsGeojson(geojson, arrData, indicator) {
+  return {
+    ...geojson,
+    features: geojson.features.map((feature) => {
+      const arrNum = Number(feature.properties.c_ar);
+      const data = arrData[arrNum] || {};
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          arrondissement: arrNum,
+          score: data[indicator] ?? 50,
+          quality: data.quality ?? 50,
+          culture: data.culture ?? 50,
+          services: data.services ?? 50,
+          transport: data.transport ?? 50,
+          prix_score: data.prix_score ?? 50,
+          loyer_median: data.loyer_median ?? 0,
+          loyer_moyen: data.loyer_moyen ?? 0,
+          loyer_maximum: data.loyer_maximum ?? 0,
+        },
+      };
+    }),
+  };
+}
+
+function enrichIrisGeojson(geojson, irisData, indicator) {
+  return {
+    ...geojson,
+    features: geojson.features.map((feature) => {
+      const codeIris = feature.properties.code_iris;
+      const data = irisData[codeIris] || {};
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          code_iris: codeIris,
+          score: data[indicator] ?? 50,
+          quality: data.quality ?? 50,
+          culture: data.culture ?? 50,
+          services: data.services ?? 50,
+          transport: data.transport ?? 50,
+          prix_score: data.prix_score ?? 50,
+          loyer_median: data.loyer_median ?? 0,
+          loyer_moyen: data.loyer_moyen ?? 0,
+          loyer_maximum: data.loyer_maximum ?? 0,
+        },
+      };
+    }),
+  };
 }
 
 function MapView({
@@ -66,12 +106,14 @@ function MapView({
 }) {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
-  const scoresRef = useRef({});
+  const arrDataRef = useRef({});
+  const irisDataRef = useRef({});
   const popupRef = useRef(null);
 
   const compareModeRef = useRef(compareMode);
   const compareTargetRef = useRef(compareTarget);
   const selectedIndicatorRef = useRef(selectedIndicator);
+  const selectedYearRef = useRef(selectedYear);
 
   useEffect(() => {
     compareModeRef.current = compareMode;
@@ -86,6 +128,10 @@ function MapView({
   }, [selectedIndicator]);
 
   useEffect(() => {
+    selectedYearRef.current = selectedYear;
+  }, [selectedYear]);
+
+  useEffect(() => {
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
@@ -96,39 +142,36 @@ function MapView({
     mapRef.current = map;
 
     map.on("load", async () => {
-      const scores = await fetchScores(selectedYear);
-      scoresRef.current = scores;
+      const [arrData, irisData, arrResponse, irisResponse] = await Promise.all([
+        fetchArrondissements(selectedYearRef.current),
+        fetchIrisScores(selectedYearRef.current),
+        fetch("/data/arrondissements.geojson"),
+        fetch("/data/iris_paris.geojson"),
+      ]);
+
+      arrDataRef.current = arrData;
+      irisDataRef.current = irisData;
+
+      const arrGeojsonRaw = await arrResponse.json();
+      const irisGeojsonRaw = await irisResponse.json();
+
+      const arrGeojson = enrichArrondissementsGeojson(
+        arrGeojsonRaw,
+        arrDataRef.current,
+        selectedIndicatorRef.current
+      );
+
+      const irisGeojson = enrichIrisGeojson(
+        irisGeojsonRaw,
+        irisDataRef.current,
+        selectedIndicatorRef.current
+      );
 
       map.addSource("arrondissements", {
         type: "geojson",
-        data: "/data/arrondissements.geojson",
+        data: arrGeojson,
+        generateId: true,
       });
-
-      map.addLayer({
-        id: "arr-fill",
-        type: "fill",
-        source: "arrondissements",
-        maxzoom: 11.8,
-        paint: {
-          "fill-color": "#76b7ae",
-          "fill-opacity": 0.35,
-        },
-      });
-
-      const irisResponse = await fetch("/data/iris_paris.geojson");
-      const irisGeojson = await irisResponse.json();
-
-      irisGeojson.features = irisGeojson.features.map((feature) => ({
-        ...feature,
-        properties: {
-          ...feature.properties,
-          score: getScoreFromData(
-            scoresRef.current,
-            feature.properties.code_iris,
-            selectedIndicatorRef.current
-          ),
-        },
-      }));
 
       map.addSource("iris", {
         type: "geojson",
@@ -137,30 +180,23 @@ function MapView({
       });
 
       map.addLayer({
-        id: "iris-fill",
+        id: "arr-fill",
         type: "fill",
-        source: "iris",
-        minzoom: 11.5,
+        source: "arrondissements",
+        maxzoom: 13,
         paint: {
-          "fill-color": getColorScale(selectedIndicatorRef.current),
+          "fill-color": [
+            "interpolate",
+            ["linear"],
+            ["get", "score"],
+            ...SCORE_COLORS,
+          ],
           "fill-opacity": [
             "case",
             ["boolean", ["feature-state", "hover"], false],
-            0.85,
-            0.62,
+            0.78,
+            0.55,
           ],
-        },
-      });
-
-      map.addLayer({
-        id: "iris-outline",
-        type: "line",
-        source: "iris",
-        minzoom: 11.5,
-        paint: {
-          "line-color": "#ffffff",
-          "line-width": 0.7,
-          "line-opacity": 0.9,
         },
       });
 
@@ -168,6 +204,7 @@ function MapView({
         id: "arr-outline",
         type: "line",
         source: "arrondissements",
+        maxzoom: 13,
         paint: {
           "line-color": "#183247",
           "line-width": [
@@ -182,17 +219,61 @@ function MapView({
         },
       });
 
-      map.on("click", "arr-fill", (e) => {
-        const feature = e.features[0];
-        const bounds = new maplibregl.LngLatBounds();
+      map.addLayer({
+        id: "arr-labels",
+        type: "symbol",
+        source: "arrondissements",
+        maxzoom: 13,
+        layout: {
+          "text-field": ["concat", ["to-string", ["get", "c_ar"]], "e"],
+          "text-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10, 11,
+            13, 16,
+          ],
+          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-allow-overlap": true,
+        },
+        paint: {
+          "text-color": "#183247",
+          "text-halo-color": "rgba(255,255,255,0.85)",
+          "text-halo-width": 1.5,
+        },
+      });
 
-        extendBounds(bounds, feature.geometry.coordinates);
+      map.addLayer({
+        id: "iris-fill",
+        type: "fill",
+        source: "iris",
+        minzoom: 13,
+        paint: {
+          "fill-color": [
+            "interpolate",
+            ["linear"],
+            ["get", "score"],
+            ...SCORE_COLORS,
+          ],
+          "fill-opacity": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false],
+            0.8,
+            0.6,
+          ],
+        },
+      });
 
-        map.fitBounds(bounds, {
-          padding: 90,
-          duration: 900,
-          maxZoom: 13.3,
-        });
+      map.addLayer({
+        id: "iris-outline",
+        type: "line",
+        source: "iris",
+        minzoom: 13,
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 1,
+          "line-opacity": 0.4,
+        },
       });
 
       popupRef.current = new maplibregl.Popup({
@@ -201,78 +282,108 @@ function MapView({
         offset: 12,
       });
 
-      let hoveredId = null;
+      const arrHoverRef = { current: null };
+      const irisHoverRef = { current: null };
 
-      map.on("mousemove", "iris-fill", (e) => {
+      const handleMouseMove = (sourceName, hoveredRef) => (e) => {
         if (!e.features.length) return;
 
         const feature = e.features[0];
-        const properties = feature.properties;
+        const props = feature.properties;
 
-        if (hoveredId !== null) {
+        if (hoveredRef.current !== null) {
           map.setFeatureState(
-            { source: "iris", id: hoveredId },
+            { source: sourceName, id: hoveredRef.current },
             { hover: false }
           );
         }
 
-        hoveredId = feature.id;
+        hoveredRef.current = feature.id;
 
         map.setFeatureState(
-          { source: "iris", id: hoveredId },
+          { source: sourceName, id: hoveredRef.current },
           { hover: true }
         );
 
         map.getCanvas().style.cursor = "pointer";
 
         const indicator = selectedIndicatorRef.current;
-
-        const score = getScoreFromData(
-          scoresRef.current,
-          properties.code_iris,
-          indicator
-        );
+        const title =
+          props.nom_iris ||
+          props.l_ar ||
+          `${props.arrondissement || props.c_ar}e Arrondissement`;
 
         popupRef.current
           .setLngLat(e.lngLat)
           .setHTML(`
             <div class="map-tooltip">
-              <strong>${properties.nom_iris || "Zone IRIS"}</strong>
+              <strong>${title}</strong>
               <span>${indicatorLabels[indicator]}</span>
-              <b>${formatValue(score, indicator)}</b>
+              <b>${getTooltipValue(props, indicator)}</b>
             </div>
           `)
           .addTo(map);
-      });
+      };
 
-      map.on("mouseleave", "iris-fill", () => {
-        if (hoveredId !== null) {
+      const handleMouseLeave = (sourceName, hoveredRef) => () => {
+        if (hoveredRef.current !== null) {
           map.setFeatureState(
-            { source: "iris", id: hoveredId },
+            { source: sourceName, id: hoveredRef.current },
             { hover: false }
           );
         }
 
-        hoveredId = null;
+        hoveredRef.current = null;
         map.getCanvas().style.cursor = "";
         popupRef.current.remove();
-      });
+      };
 
-      map.on("click", "iris-fill", (e) => {
-        const clickedZone = e.features[0].properties;
+      map.on("mousemove", "arr-fill", handleMouseMove("arrondissements", arrHoverRef));
+      map.on("mouseleave", "arr-fill", handleMouseLeave("arrondissements", arrHoverRef));
+
+      map.on("mousemove", "iris-fill", handleMouseMove("iris", irisHoverRef));
+      map.on("mouseleave", "iris-fill", handleMouseLeave("iris", irisHoverRef));
+
+      const handleZoneClick = (e, isIris) => {
+        const feature = e.features[0];
+        const props = feature.properties;
+
+        const bounds = new maplibregl.LngLatBounds();
+        extendBounds(bounds, feature.geometry.coordinates);
+
+        map.fitBounds(bounds, {
+          padding: 90,
+          duration: 900,
+          maxZoom: isIris ? 15 : 13.5,
+        });
+
+        const zone = isIris
+          ? {
+              ...(irisDataRef.current[props.code_iris] || props),
+              code_iris: props.code_iris,
+              nom_iris: props.nom_iris,
+            }
+          : {
+              ...(arrDataRef.current[props.arrondissement || props.c_ar] || props),
+              arrondissement: props.arrondissement || props.c_ar,
+              l_ar: props.l_ar,
+            };
 
         if (!compareModeRef.current) {
-          setSelectedZone(clickedZone);
+          setSelectedZone(zone);
           setCompareZone(null);
           return;
         }
 
         if (compareTargetRef.current === "A") {
-          setSelectedZone(clickedZone);
+          setSelectedZone(zone);
         } else {
-          setCompareZone(clickedZone);
+          setCompareZone(zone);
         }
-      });
+      };
+
+      map.on("click", "arr-fill", (e) => handleZoneClick(e, false));
+      map.on("click", "iris-fill", (e) => handleZoneClick(e, true));
     });
 
     return () => map.remove();
@@ -280,36 +391,37 @@ function MapView({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.getSource("iris") || !selectedYear) return;
+
+    if (
+      !map ||
+      !map.getSource("arrondissements") ||
+      !map.getSource("iris")
+    ) {
+      return;
+    }
 
     selectedIndicatorRef.current = selectedIndicator;
+    selectedYearRef.current = selectedYear;
 
-    fetchScores(selectedYear).then((scores) => {
-      scoresRef.current = scores;
+    Promise.all([
+      fetchArrondissements(selectedYear),
+      fetchIrisScores(selectedYear),
+      fetch("/data/arrondissements.geojson"),
+      fetch("/data/iris_paris.geojson"),
+    ]).then(async ([arrData, irisData, arrResponse, irisResponse]) => {
+      arrDataRef.current = arrData;
+      irisDataRef.current = irisData;
 
-      fetch("/data/iris_paris.geojson")
-        .then((res) => res.json())
-        .then((geojson) => {
-          geojson.features = geojson.features.map((feature) => ({
-            ...feature,
-            properties: {
-              ...feature.properties,
-              score: getScoreFromData(
-                scoresRef.current,
-                feature.properties.code_iris,
-                selectedIndicator
-              ),
-            },
-          }));
+      const arrGeojsonRaw = await arrResponse.json();
+      const irisGeojsonRaw = await irisResponse.json();
 
-          map.getSource("iris").setData(geojson);
+      map.getSource("arrondissements").setData(
+        enrichArrondissementsGeojson(arrGeojsonRaw, arrData, selectedIndicator)
+      );
 
-          map.setPaintProperty(
-            "iris-fill",
-            "fill-color",
-            getColorScale(selectedIndicator)
-          );
-        });
+      map.getSource("iris").setData(
+        enrichIrisGeojson(irisGeojsonRaw, irisData, selectedIndicator)
+      );
     });
   }, [selectedIndicator, selectedYear]);
 
@@ -317,15 +429,15 @@ function MapView({
     <main className="map-section">
       <div className="map-header">
         <h2>Carte des scores immobiliers</h2>
-        <p>Clique sur un arrondissement pour zoomer · IRIS visibles au zoom</p>
+        <p>Clique sur un arrondissement pour zoomer et voir les détails</p>
       </div>
 
       <div ref={mapContainer} className="map-container" />
 
       <RankingPanel
-  selectedIndicator={selectedIndicator}
-  selectedYear={selectedYear}
-/>
+        selectedIndicator={selectedIndicator}
+        selectedYear={selectedYear}
+      />
     </main>
   );
 }

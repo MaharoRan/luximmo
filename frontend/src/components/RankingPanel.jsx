@@ -1,51 +1,49 @@
 import { useEffect, useState } from "react";
-import { fetchScores, getScoreFromData } from "../services/scoresService";
+import { fetchArrondissements, formatEuro } from "../services/scoresService";
 
 const indicatorLabels = {
   quality: "Qualité de vie",
   culture: "Culture & loisirs",
   services: "Services publics",
   transport: "Transports",
-  price: "Prix immobilier",
+  prix_score: "Prix immobilier",
 };
 
-function formatScore(value, indicator) {
-  if (indicator === "price") {
-    return `${Number(value).toLocaleString("fr-FR")} €/m²`;
-  }
-
-  return `${value}/100`;
-}
-
 function RankingPanel({ selectedIndicator, selectedYear }) {
-  const [scoresByIris, setScoresByIris] = useState({});
+  const [arrData, setArrData] = useState({});
 
   useEffect(() => {
-    if (!selectedYear) return;
-    fetchScores(selectedYear).then(setScoresByIris);
+    fetchArrondissements(selectedYear).then(setArrData);
   }, [selectedYear]);
 
-  const ranking = Object.values(scoresByIris)
-    .map((zone) => ({
-      code_iris: zone.code_iris,
-      nom_iris: zone.nom_iris || zone.code_iris,
-      score: getScoreFromData(scoresByIris, zone.code_iris, selectedIndicator),
+  const isPrix = selectedIndicator === "prix_score";
+
+  const ranking = Object.values(arrData)
+    .map((arr) => ({
+      key: arr.arrondissement,
+      label: `${arr.arrondissement}e Ardt`,
+      score: arr[selectedIndicator] ?? 50,
+      loyer_median: arr.loyer_median,
     }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) =>
+      isPrix ? a.loyer_median - b.loyer_median : b.score - a.score
+    )
     .slice(0, 6);
 
   return (
     <div className="right-panel">
-      <h3>Top zones</h3>
+      <h3>Top arrondissements</h3>
+
       <p className="ranking-subtitle">
-        {indicatorLabels[selectedIndicator]} · {selectedYear}
+        {indicatorLabels[selectedIndicator]}
+        {selectedYear ? ` · ${selectedYear}` : ""}
       </p>
 
-      {ranking.map((zone, index) => (
-        <div className="rank-row" key={zone.code_iris}>
+      {ranking.map((item, index) => (
+        <div className="rank-row" key={item.key}>
           <span>{index + 1}</span>
-          <strong>{zone.nom_iris}</strong>
-          <p>{formatScore(zone.score, selectedIndicator)}</p>
+          <strong>{item.label}</strong>
+          <p>{isPrix ? formatEuro(item.loyer_median) : `${item.score}/100`}</p>
         </div>
       ))}
     </div>

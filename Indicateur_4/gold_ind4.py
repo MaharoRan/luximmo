@@ -1,102 +1,17 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-import re
-
 import pandas as pd
-from shapely.geometry import Point
-from shapely.strtree import STRtree
 from shapely import wkb
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GEO_DIR = REPO_ROOT / "geo"
+sys.path.append(str(REPO_ROOT))
+
+from utils.geo_helpers import load_paris_iris, attach_iris_from_points, extract_paris_arrondissement, safe_numeric_series
+
 SILVER_DIR = REPO_ROOT / "Indicateur_4" / "silver"
 GOLD_DIR = REPO_ROOT / "Indicateur_4" / "gold"
-
-PARIS_ARRONDISSEMENT_RE = re.compile(r"Paris\s+(\d{1,2})e\s+Arrondissement", re.IGNORECASE)
-POSTAL_75_RE = re.compile(r"75(\d{3})")
-
-
-def _safe_numeric_series(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series, errors="coerce")
-
-
-def _extract_paris_arrondissement(value) -> int | None:
-    if value is None:
-        return None
-
-    text = str(value).strip()
-    if not text:
-        return None
-
-    match = PARIS_ARRONDISSEMENT_RE.search(text)
-    if match:
-        arrondissement = int(match.group(1))
-        if 1 <= arrondissement <= 20:
-            return arrondissement
-
-    match = POSTAL_75_RE.search(text)
-    if match:
-        arrondissement = int(match.group(1)) % 100
-        if 1 <= arrondissement <= 20:
-            return arrondissement
-
-    if text.isdigit():
-        arrondissement = int(text)
-        if 1 <= arrondissement <= 20:
-            return arrondissement
-
-    return None
-
-
-def _load_paris_iris() -> pd.DataFrame:
-    iris = pd.read_parquet(GEO_DIR / "iris.parquet")
-    iris = iris[iris["nom_com"].astype(str).str.contains("Paris", case=False, na=False)].copy()
-    iris["arrondissement"] = iris["nom_com"].apply(_extract_paris_arrondissement)
-    iris["geometry"] = iris["geo_shape"].apply(lambda value: wkb.loads(bytes(value)) if pd.notna(value) else None)
-    iris = iris.dropna(subset=["arrondissement", "geometry"]).copy()
-    iris["arrondissement"] = iris["arrondissement"].astype(int)
-    return iris[["code_iris", "nom_iris", "nom_com", "arrondissement", "geometry"]]
-
-
-def _attach_arrondissement_from_points(df: pd.DataFrame, lon_col: str, lat_col: str, iris: pd.DataFrame) -> pd.DataFrame:
-    working = df.copy()
-    working[lon_col] = _safe_numeric_series(working[lon_col])
-    working[lat_col] = _safe_numeric_series(working[lat_col])
-    working = working.dropna(subset=[lon_col, lat_col]).copy()
-    if working.empty:
-        working["arrondissement"] = pd.Series(dtype="int64")
-        return working
-
-    iris_geometries = iris["geometry"].tolist()
-    iris_arrondissements = iris["arrondissement"].tolist()
-    iris_lookup = {geometry.wkb: arrondissement for geometry, arrondissement in zip(iris_geometries, iris_arrondissements)}
-    tree = STRtree(iris_geometries)
-
-    arrondissements: list[int | None] = []
-    for longitude, latitude in zip(working[lon_col], working[lat_col]):
-        point = Point(float(longitude), float(latitude))
-        arrondissement = None
-        for candidate in tree.query(point):
-            if hasattr(candidate, "covers"):
-                geometry = candidate
-                candidate_arrondissement = iris_lookup.get(candidate.wkb)
-            else:
-                geometry = iris_geometries[int(candidate)]
-                candidate_arrondissement = iris_arrondissements[int(candidate)]
-
-            if geometry.covers(point):
-                arrondissement = candidate_arrondissement
-                break
-
-        arrondissements.append(arrondissement)
-
-    working["arrondissement"] = arrondissements
-    working = working.dropna(subset=["arrondissement"]).copy()
-    working["arrondissement"] = working["arrondissement"].astype(int)
-    return working
-
 
 def _normalize_weights(series: pd.Series) -> pd.Series:
     maximum = series.max(skipna=True)
@@ -104,53 +19,32 @@ def _normalize_weights(series: pd.Series) -> pd.Series:
         return series * 0
     return series / maximum
 
-
-def _load_gare_scores(iris: pd.DataFrame) -> pd.DataFrame:
+def _load_gare_scores(iris: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = pd.read_parquet(SILVER_DIR / "emplacement-des-gares-idf.parquet")
-    df = _attach_arrondissement_from_points(df, "longitude", "latitude", iris)
-
-    grouped = df.groupby("arrondissement", as_index=False).agg(
-        gare_stations=("gares_id", "count"),
-    )
+    df = attach_iris_from_points(df, "longitude", "latitude", iris)
+    grouped = df.groupby(group_col, as_index=False).agg(gare_stations=("gares_id", "count"))
     grouped["gare_raw"] = grouped["gare_stations"]
     return grouped
 
-
-def _load_velib_scores(iris: pd.DataFrame) -> pd.DataFrame:
+def _load_velib_scores(iris: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = pd.read_parquet(SILVER_DIR / "velib-emplacement-des-stations.parquet")
-    df = df.copy()
     if "coordonnees_geo" in df.columns:
         points = df["coordonnees_geo"].apply(lambda value: wkb.loads(value) if pd.notna(value) else None)
-        if points.notna().sum() == 0:
-            raise ValueError(
-                "Le parquet silver Vélib contient `coordonnees_geo` mais aucune géométrie exploitable."
-            )
         df["longitude"] = points.apply(lambda geom: geom.x if geom is not None else None)
         df["latitude"] = points.apply(lambda geom: geom.y if geom is not None else None)
-    elif {"longitude", "latitude"}.issubset(df.columns):
-        if df[["longitude", "latitude"]].notna().sum().sum() == 0:
-            raise ValueError(
-                "Le parquet silver Vélib contient `longitude`/`latitude` mais elles sont toutes vides."
-            )
-        pass
-    else:
-        raise ValueError(
-            "Le parquet silver Vélib ne contient ni coordonnees_geo ni colonnes longitude/latitude exploitables. "
-            "Il faut enrichir le silver avant de calculer le gold."
-        )
-    df = _attach_arrondissement_from_points(df, "longitude", "latitude", iris)
+    
+    df = attach_iris_from_points(df, "longitude", "latitude", iris)
     if "capacity" in df.columns:
-        df["capacity"] = _safe_numeric_series(df["capacity"]).fillna(0)
+        df["capacity"] = safe_numeric_series(df["capacity"]).fillna(0)
     else:
         df["capacity"] = 0
 
-    grouped = df.groupby("arrondissement", as_index=False).agg(
+    grouped = df.groupby(group_col, as_index=False).agg(
         velib_stations=("stationcode", "count"),
         velib_capacity=("capacity", "sum"),
     )
     grouped["velib_raw"] = grouped["velib_stations"] + grouped["velib_capacity"] / 60.0
     return grouped
-
 
 def _amenagement_weight(value, coronapiste) -> float:
     text = str(value).lower() if value is not None else ""
@@ -172,11 +66,9 @@ def _amenagement_weight(value, coronapiste) -> float:
 
     return weight
 
-
 def _load_cycling_scores() -> pd.DataFrame:
     df = pd.read_parquet(SILVER_DIR / "amenagements-cyclables.parquet")
-    df = df.copy()
-    df["arrondissement"] = df["arrondissement"].apply(_extract_paris_arrondissement)
+    df["arrondissement"] = df["arrondissement"].apply(extract_paris_arrondissement)
     df = df.dropna(subset=["arrondissement"]).copy()
     df["arrondissement"] = df["arrondissement"].astype(int)
     df["cycling_weight"] = df.apply(lambda row: _amenagement_weight(row.get("amenagement"), row.get("coronapiste")), axis=1)
@@ -188,43 +80,30 @@ def _load_cycling_scores() -> pd.DataFrame:
     grouped["cycling_raw"] = grouped["cycling_weight"]
     return grouped
 
-
-def _load_transport_proxy_scores(iris: pd.DataFrame) -> pd.DataFrame:
+def _load_transport_proxy_scores(iris: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = pd.read_parquet(SILVER_DIR / "plan de voirie.parquet")
-    df = _attach_arrondissement_from_points(df, "longitude", "latitude", iris)
-
-    grouped = df.groupby("arrondissement", as_index=False).agg(
-        transport_segments=("OBJECTID", "count"),
-    )
+    df = attach_iris_from_points(df, "longitude", "latitude", iris)
+    grouped = df.groupby(group_col, as_index=False).agg(transport_segments=(group_col, "count"))
     grouped["transport_raw"] = grouped["transport_segments"]
     return grouped
 
+def build_score_df(iris: pd.DataFrame, group_col: str, base_df: pd.DataFrame) -> pd.DataFrame:
+    gare = _load_gare_scores(iris, group_col)
+    velib = _load_velib_scores(iris, group_col)
+    cycling = _load_cycling_scores()
+    transport = _load_transport_proxy_scores(iris, group_col)
 
-def build_gold_score() -> pd.DataFrame:
-    iris = _load_paris_iris()
-
-    gare_scores = _load_gare_scores(iris)
-    velib_scores = _load_velib_scores(iris)
-    cycling_scores = _load_cycling_scores()
-    transport_scores = _load_transport_proxy_scores(iris)
-
-    score = pd.DataFrame({"arrondissement": list(range(1, 21))})
-    score = score.merge(gare_scores, on="arrondissement", how="left")
-    score = score.merge(velib_scores, on="arrondissement", how="left")
-    score = score.merge(cycling_scores, on="arrondissement", how="left")
-    score = score.merge(transport_scores, on="arrondissement", how="left")
+    score = base_df.copy()
+    score = score.merge(gare, on=group_col, how="left")
+    score = score.merge(velib, on=group_col, how="left")
+    score = score.merge(cycling, on="arrondissement", how="left")
+    score = score.merge(transport, on=group_col, how="left")
 
     numeric_columns = [
-        "gare_stations",
-        "gare_raw",
-        "velib_stations",
-        "velib_capacity",
-        "velib_raw",
-        "cycling_segments",
-        "cycling_weight",
-        "cycling_raw",
-        "transport_segments",
-        "transport_raw",
+        "gare_stations", "gare_raw",
+        "velib_stations", "velib_capacity", "velib_raw",
+        "cycling_segments", "cycling_weight", "cycling_raw",
+        "transport_segments", "transport_raw",
     ]
     for column in numeric_columns:
         if column not in score.columns:
@@ -236,44 +115,46 @@ def build_gold_score() -> pd.DataFrame:
     score["cycling_norm"] = _normalize_weights(score["cycling_raw"])
     score["transport_norm"] = _normalize_weights(score["transport_raw"])
 
-    score["score_acces_transport"] = (
-        100
-        * (
-            0.45 * score["gare_norm"]
-            + 0.30 * score["transport_norm"]
-            + 0.15 * score["velib_norm"]
-            + 0.10 * score["cycling_norm"]
-        )
-    ).round(2)
+    raw_final = (
+        0.45 * score["gare_norm"]
+        + 0.30 * score["transport_norm"]
+        + 0.15 * score["velib_norm"]
+        + 0.10 * score["cycling_norm"]
+    )
+    
+    s_min = raw_final.min()
+    s_max = raw_final.max()
+    if s_max > s_min:
+        score["score_acces_transport"] = (20 + 80 * (raw_final - s_min) / (s_max - s_min)).round(2)
+    else:
+        score["score_acces_transport"] = 50.0
 
-    score["arrondissement_libelle"] = score["arrondissement"].apply(lambda value: f"Paris {int(value)}e Arrondissement")
     score = score.sort_values("score_acces_transport", ascending=False).reset_index(drop=True)
-    return score[
-        [
-            "arrondissement",
-            "arrondissement_libelle",
-            "score_acces_transport",
-            "gare_stations",
-            "velib_stations",
-            "velib_capacity",
-            "cycling_segments",
-            "cycling_weight",
-            "transport_segments",
-            "gare_norm",
-            "velib_norm",
-            "cycling_norm",
-            "transport_norm",
-        ]
-    ]
+    return score
 
+def build_gold_scores() -> tuple[pd.DataFrame, pd.DataFrame]:
+    iris = load_paris_iris()
+    
+    arr_base = pd.DataFrame({"arrondissement": list(range(1, 21))})
+    score_arr = build_score_df(iris, "arrondissement", arr_base)
+    score_arr["arrondissement_libelle"] = score_arr["arrondissement"].apply(lambda value: f"Paris {int(value)}e Arrondissement")
+    
+    iris_base = iris[["code_iris", "nom_iris", "arrondissement", "nom_com"]].drop_duplicates()
+    score_iris = build_score_df(iris, "code_iris", iris_base)
+    
+    return score_arr, score_iris
 
 def main() -> None:
     GOLD_DIR.mkdir(parents=True, exist_ok=True)
-    score = build_gold_score()
-    output_path = GOLD_DIR / "score_acces_transport.parquet"
-    score.to_parquet(output_path, index=False)
-    print(f"Ecrit: {output_path}")
-
+    score_arr, score_iris = build_gold_scores()
+    
+    path_arr = GOLD_DIR / "score_acces_transport.parquet"
+    score_arr.to_parquet(path_arr, index=False)
+    print(f"Ecrit: {path_arr}")
+    
+    path_iris = GOLD_DIR / "score_acces_transport_iris.parquet"
+    score_iris.to_parquet(path_iris, index=False)
+    print(f"Ecrit: {path_iris}")
 
 if __name__ == "__main__":
     main()
