@@ -93,13 +93,6 @@ cd api
 uvicorn main:app --reload
 ```
 
-The API exposes endpoints such as:
-
-- `/api/health`
-- `/api/years`
-- `/api/arrondissements`
-- `/api/iris`
-
 ## Launch the frontend
 
 ```bash
