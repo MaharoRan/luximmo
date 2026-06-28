@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import {
   fetchAvailableYears,
   fetchArrondissements,
@@ -139,6 +140,58 @@ function PrixBlock({ zone }) {
         <span>Prix de vente médian</span>
         <b>{formatEuro(zone.prix_vente_median)}</b>
       </div>
+    </div>
+  );
+}
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#A28DFF", "#FF6666", "#66B2FF", "#99FF99", "#FF99CC", "#FFCC99"];
+
+function RepartitionChart({ zone }) {
+  if (!zone) return null;
+
+  const data = [];
+  const types = ["Appartement", "Maison"];
+  const pieces = ["1", "2", "3", "4", "5+"];
+
+  types.forEach((t) => {
+    pieces.forEach((p) => {
+      const key = `${t}_T${p}`;
+      if (zone[key] && zone[key] > 0) {
+        data.push({ name: `${t} T${p}`, value: zone[key] });
+      }
+    });
+  });
+
+  if (data.length === 0) return null;
+
+  return (
+    <div className="repartition-chart" style={{ height: 250, marginTop: "1rem" }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={40}
+            outerRadius={70}
+            fill="#8884d8"
+            paddingAngle={2}
+            dataKey="value"
+          >
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value) => new Intl.NumberFormat("fr-FR").format(value)} />
+          <Legend 
+            iconSize={10}
+            wrapperStyle={{
+              fontSize: "12px",
+              paddingTop: "10px"
+            }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -358,6 +411,13 @@ function Sidebar({
 
             <h4>Prix immobilier</h4>
             <PrixBlock zone={selectedZone} />
+
+            {selectedIndicator === "prix_score" && (
+              <>
+                <h4 style={{ marginTop: "1rem" }}>Répartition des ventes</h4>
+                <RepartitionChart zone={selectedZone} />
+              </>
+            )}
 
             <hr />
 

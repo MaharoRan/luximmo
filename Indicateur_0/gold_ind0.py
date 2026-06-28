@@ -33,16 +33,29 @@ def _prepare_dvf() -> pd.DataFrame:
 
     full_df["arrondissement"] = full_df["code_postal"].astype(str).str[-2:].astype(int)
 
+    # Catégories pour la répartition (T1, T2, etc.)
+    full_df["pieces"] = pd.to_numeric(full_df["nombre_pieces_principales"], errors="coerce").fillna(0).astype(int).clip(upper=5)
+    full_df["type_pieces"] = full_df["type_local"].astype(str) + "_T" + full_df["pieces"].astype(str)
+    full_df.loc[full_df["pieces"] >= 5, "type_pieces"] = full_df["type_local"].astype(str) + "_T5+"
+    
+    categories = [f"{t}_T{p}" for t in ["Appartement", "Maison"] for p in ["1", "2", "3", "4", "5+"]]
+    for cat in categories:
+        full_df[cat] = (full_df["type_pieces"] == cat).astype(int)
+
     # Grouper par mutation
     if "id_mutation" in full_df.columns:
-        mutation_df = full_df.groupby("id_mutation").agg(
+        mutation_agg_dict = dict(
             valeur_fonciere=("valeur_fonciere", "max"),
             surface_reelle_bati=("surface_reelle_bati", "sum"),
             year=("year", "first"),
             arrondissement=("arrondissement", "first"),
             longitude=("longitude", "first"),
             latitude=("latitude", "first")
-        ).reset_index()
+        )
+        for cat in categories:
+            if cat in full_df.columns:
+                mutation_agg_dict[cat] = (cat, "max")
+        mutation_df = full_df.groupby("id_mutation").agg(**mutation_agg_dict).reset_index()
     else:
         mutation_df = full_df
 
@@ -63,7 +76,7 @@ def _prepare_dvf() -> pd.DataFrame:
 
 
 def _agg_scores(df: pd.DataFrame, groupby_cols: str | list[str]) -> pd.DataFrame:
-    agg_df = df.groupby(groupby_cols).agg(
+    agg_dict = dict(
         prix_vente_moyen=("valeur_fonciere", "mean"),
         prix_vente_median=("valeur_fonciere", "median"),
         surface_moyenne=("surface_reelle_bati", "mean"),
@@ -74,7 +87,13 @@ def _agg_scores(df: pd.DataFrame, groupby_cols: str | list[str]) -> pd.DataFrame
         prix_m2_minimum=("prix_m2", "min"),
         prix_m2_maximum=("prix_m2", "max"),
         transactions_count=("prix_m2", "count"),
-    ).reset_index()
+    )
+    categories = [f"{t}_T{p}" for t in ["Appartement", "Maison"] for p in ["1", "2", "3", "4", "5+"]]
+    for cat in categories:
+        if cat in df.columns:
+            agg_dict[cat] = (cat, "sum")
+
+    agg_df = df.groupby(groupby_cols).agg(**agg_dict).reset_index()
 
     cols_to_round = [
         "prix_vente_moyen", "prix_vente_median", 

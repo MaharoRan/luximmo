@@ -143,24 +143,16 @@ def load_prices(year: int | None = None):
     prices["loyer_median"] = prices["prix_m2_median"]
     prices["loyer_maximum"] = prices["prix_m2_maximum"]
 
-    return prices[
-        [
-            "arrondissement",
-            "year",
-            "prix_vente_moyen",
-            "prix_vente_median",
-            "surface_moyenne",
-            "surface_mediane",
-            "prix_m2_moyen",
-            "prix_m2_median",
-            "prix_m2_minimum",
-            "prix_m2_maximum",
-            "transactions_count",
-            "loyer_moyen",
-            "loyer_median",
-            "loyer_maximum",
-        ]
+    cols_to_keep = [
+        "arrondissement", "year", "prix_vente_moyen", "prix_vente_median",
+        "surface_moyenne", "surface_mediane", "prix_m2_moyen", "prix_m2_median",
+        "prix_m2_minimum", "prix_m2_maximum", "transactions_count",
+        "loyer_moyen", "loyer_median", "loyer_maximum"
     ]
+    categories = [f"{t}_T{p}" for t in ["Appartement", "Maison"] for p in ["1", "2", "3", "4", "5+"]]
+    existing_cols = [c for c in cols_to_keep + categories if c in prices.columns]
+    
+    return prices[existing_cols]
 
 
 def load_prix_iris(year: int | None = None):
@@ -187,8 +179,8 @@ def load_prix_iris(year: int | None = None):
         "prix_m2_median", "prix_m2_minimum", "prix_m2_maximum",
         "transactions_count", "loyer_moyen", "loyer_median", "loyer_maximum"
     ]
-    
-    existing_cols = [c for c in cols_to_keep if c in prix.columns]
+    categories = [f"{t}_T{p}" for t in ["Appartement", "Maison"] for p in ["1", "2", "3", "4", "5+"]]
+    existing_cols = [c for c in cols_to_keep + categories if c in prix.columns]
     return prix[existing_cols]
 
 
