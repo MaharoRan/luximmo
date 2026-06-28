@@ -90,7 +90,7 @@ From the project root:
 
 ```bash
 cd api
-python -m uvicorn main:app --reload 
+python -m uvicorn main:app --reload
 ```
 
 ## Launch the frontend
