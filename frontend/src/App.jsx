@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "./components/SideBar";
 import MapView from "./components/MapView";
+import Login from "./components/Login";
 import "./App.css";
 
 function App() {
+  const [token, setToken] = useState(localStorage.getItem("luximmo_token"));
   const [selectedIndicator, setSelectedIndicator] = useState("quality");
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedZone, setSelectedZone] = useState(null);
   const [compareZone, setCompareZone] = useState(null);
   const [compareMode, setCompareMode] = useState(false);
   const [compareTarget, setCompareTarget] = useState("A");
+
+  if (!token) {
+    return <Login onLoginSuccess={setToken} />;
+  }
 
   return (
     <div className="app">

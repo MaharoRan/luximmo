@@ -2,9 +2,20 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from datetime import timedelta
+
 import pandas as pd
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+
+from auth import (
+    get_current_user,
+    verify_password,
+    FAKE_USERS_DB,
+    create_access_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
 from batch import update_chantiers_batch, update_trafic_batch, batch_status
 
@@ -205,6 +216,28 @@ def add_prix_score(result: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+@app.post("/api/token")
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    user_dict = FAKE_USERS_DB.get(form_data.username)
+    if not user_dict:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not verify_password(form_data.password, user_dict["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user_dict["username"]}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 @app.get("/")
 def root():
     return {"message": "LuxImmo API is running"}
@@ -216,7 +249,7 @@ def health():
 
 
 @app.get("/api/years")
-def get_years():
+def get_years(current_user: dict = Depends(get_current_user)):
     prices_path = ROOT / "Indicateur_0" / "gold" / "prix_m2_arrondissement_year.parquet"
     prices = pd.read_parquet(prices_path)
     years = sorted(prices["year"].dropna().astype(int).unique().tolist())
@@ -224,7 +257,7 @@ def get_years():
 
 
 @app.get("/api/arrondissements")
-def get_arrondissements(year: int | None = Query(default=None)):
+def get_arrondissements(year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
     scores = load_gold_scores()
     prices = load_prices(year)
 
@@ -244,7 +277,7 @@ def get_arrondissements(year: int | None = Query(default=None)):
 
 
 @app.get("/api/iris")
-def get_iris(year: int | None = Query(default=None)):
+def get_iris(year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
     scores = load_gold_scores_iris()
     prix = load_prix_iris(year)
 
@@ -261,7 +294,7 @@ def get_iris(year: int | None = Query(default=None)):
 
 
 @app.get("/api/scores")
-def get_scores(year: int | None = Query(default=None)):
+def get_scores(year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
     iris = load_paris_iris()
     scores = load_gold_scores()
     prices = load_prices(year)
@@ -278,6 +311,6 @@ def get_scores(year: int | None = Query(default=None)):
 
     return result.to_dict(orient="records")
 @app.get('/api/batch-status')
-def get_batch_status():
+def get_batch_status(current_user: dict = Depends(get_current_user)):
     return batch_status
 

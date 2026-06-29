@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { authFetch } from '../services/scoresService';
 import './LayerControl.css';
 
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -16,7 +17,7 @@ export default function LayerControl({ activeLayers, toggleLayer }) {
 
   useEffect(() => {
     const fetchStatus = () => {
-      fetch(`${API_BASE_URL}/api/batch-status`)
+      authFetch(`${API_BASE_URL}/api/batch-status`)
         .then(res => res.json())
         .then(data => setStatus(data))
         .catch(err => console.error("Could not fetch batch status", err));

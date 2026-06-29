@@ -1,11 +1,28 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+export async function authFetch(url, options = {}) {
+  const token = localStorage.getItem("luximmo_token");
+  const headers = {
+    ...options.headers,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  
+  const response = await fetch(url, { ...options, headers });
+  
+  if (response.status === 401) {
+    localStorage.removeItem("luximmo_token");
+    window.location.reload();
+  }
+  
+  return response;
+}
+
 export async function fetchScores(year = null) {
   const url = year
     ? `${API_URL}/api/scores?year=${year}`
     : `${API_URL}/api/scores`;
 
-  const response = await fetch(url);
+  const response = await authFetch(url);
 
   if (!response.ok) {
     throw new Error("Impossible de charger les scores depuis l’API");
@@ -17,7 +34,7 @@ export async function fetchScores(year = null) {
 }
 
 export async function fetchAvailableYears() {
-  const response = await fetch(`${API_URL}/api/years`);
+  const response = await authFetch(`${API_URL}/api/years`);
 
   if (!response.ok) {
     throw new Error("Impossible de charger les années");
@@ -32,7 +49,7 @@ export async function fetchArrondissements(year = null) {
     ? `${API_URL}/api/arrondissements?year=${year}`
     : `${API_URL}/api/arrondissements`;
 
-  const response = await fetch(url);
+  const response = await authFetch(url);
 
   if (!response.ok) {
     throw new Error("Impossible de charger les arrondissements depuis l’API");
@@ -48,7 +65,7 @@ export async function fetchIrisScores(year = null) {
     ? `${API_URL}/api/iris?year=${year}`
     : `${API_URL}/api/iris`;
 
-  const response = await fetch(url);
+  const response = await authFetch(url);
 
   if (!response.ok) {
     throw new Error("Impossible de charger les données IRIS depuis l’API");
