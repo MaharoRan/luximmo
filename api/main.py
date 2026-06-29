@@ -5,9 +5,14 @@ from pathlib import Path
 from datetime import timedelta
 
 import pandas as pd
-from fastapi import FastAPI, Query, Depends, HTTPException, status
+from fastapi import FastAPI, Query, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from auth import (
     get_current_user,
@@ -30,6 +35,11 @@ async def lifespan(app: FastAPI):
     task_trafic.cancel()
 
 app = FastAPI(title="LuxImmo API", lifespan=lifespan)
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -217,7 +227,8 @@ def add_prix_score(result: pd.DataFrame) -> pd.DataFrame:
 
 
 @app.post("/api/token")
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("5/minute")
+def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     user_dict = FAKE_USERS_DB.get(form_data.username)
     if not user_dict:
         raise HTTPException(
@@ -249,7 +260,8 @@ def health():
 
 
 @app.get("/api/years")
-def get_years(current_user: dict = Depends(get_current_user)):
+@limiter.limit("60/minute")
+def get_years(request: Request, current_user: dict = Depends(get_current_user)):
     prices_path = ROOT / "Indicateur_0" / "gold" / "prix_m2_arrondissement_year.parquet"
     prices = pd.read_parquet(prices_path)
     years = sorted(prices["year"].dropna().astype(int).unique().tolist())
@@ -257,7 +269,8 @@ def get_years(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/arrondissements")
-def get_arrondissements(year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
+@limiter.limit("60/minute")
+def get_arrondissements(request: Request, year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
     scores = load_gold_scores()
     prices = load_prices(year)
 
@@ -277,7 +290,8 @@ def get_arrondissements(year: int | None = Query(default=None), current_user: di
 
 
 @app.get("/api/iris")
-def get_iris(year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
+@limiter.limit("60/minute")
+def get_iris(request: Request, year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
     scores = load_gold_scores_iris()
     prix = load_prix_iris(year)
 
@@ -294,7 +308,8 @@ def get_iris(year: int | None = Query(default=None), current_user: dict = Depend
 
 
 @app.get("/api/scores")
-def get_scores(year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
+@limiter.limit("60/minute")
+def get_scores(request: Request, year: int | None = Query(default=None), current_user: dict = Depends(get_current_user)):
     iris = load_paris_iris()
     scores = load_gold_scores()
     prices = load_prices(year)
@@ -311,6 +326,7 @@ def get_scores(year: int | None = Query(default=None), current_user: dict = Depe
 
     return result.to_dict(orient="records")
 @app.get('/api/batch-status')
-def get_batch_status(current_user: dict = Depends(get_current_user)):
+@limiter.limit("60/minute")
+def get_batch_status(request: Request, current_user: dict = Depends(get_current_user)):
     return batch_status
 

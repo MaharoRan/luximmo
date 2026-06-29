@@ -5,3 +5,4 @@ pyarrow
 PyJWT
 bcrypt
 python-multipart
+slowapi

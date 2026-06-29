@@ -13,6 +13,11 @@ export async function authFetch(url, options = {}) {
     localStorage.removeItem("luximmo_token");
     window.location.reload();
   }
+
+  if (response.status === 429) {
+    alert("Trop de requêtes ! Veuillez patienter un instant avant de continuer.");
+    throw new Error("Trop de requêtes (Rate limit dépassé).");
+  }
   
   return response;
 }
