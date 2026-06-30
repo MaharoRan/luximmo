@@ -81,7 +81,7 @@ This single command will:
 - Start the **ETL Worker**, which will immediately run the entire data pipeline once, and then schedule itself to run every day at 03:00 AM.
 
 ### Accessing the services
-- **Web App**: http://localhost:5173 (Login: `admin` / `admin`)
+- **Web App**: http://localhost:5173
 - **API Swagger**: http://localhost:8000/docs
 - **ETL Logs**: Run `docker-compose logs -f etl` to watch the data pipeline running.
 
