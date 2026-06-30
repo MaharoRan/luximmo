@@ -6,7 +6,7 @@ import "./App.css";
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("luximmo_token"));
-  const [selectedIndicator, setSelectedIndicator] = useState("quality");
+  const [selectedIndicator, setSelectedIndicator] = useState("prix_score");
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedZone, setSelectedZone] = useState(null);
   const [compareZone, setCompareZone] = useState(null);

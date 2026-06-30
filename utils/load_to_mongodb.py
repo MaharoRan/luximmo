@@ -35,15 +35,30 @@ _load_env_file(ENV_PATH)
 
 
 def _get_mongo_credentials():
-    user = os.getenv("MONGO_USER") or "maharo"
-    password = os.getenv("MONGO_PASSWORD") or "301091"
+    user = os.getenv("MONGO_USER")
+    password = os.getenv("MONGO_PASSWORD")
 
+    if user is None or password is None:
+        raise ValueError("MONGO_USER or MONGO_PASSWORD not set")
     return user, password
 
 
 def _build_mongo_uri(host, user, password, is_srv=True, replica_set=None):
     query_parts = ["retryWrites=true", "w=majority"]
-    if replica_set:
+    
+    if "localhost" in host or "127.0.0.1" in host:
+        query_parts.append("directConnection=true")
+        # Try to find which local port is the primary to avoid NotWritablePrimary error
+        try:
+            from pymongo import MongoClient
+            for port in [27017, 27018]:
+                temp_client = MongoClient(f"mongodb://localhost:{port}/?directConnection=true", serverSelectionTimeoutMS=1000)
+                if temp_client.admin.command("ismaster").get("ismaster"):
+                    host = f"localhost:{port}"
+                    break
+        except Exception:
+            pass
+    elif replica_set:
         query_parts.append(f"replicaSet={replica_set}")
 
     if user and password:

@@ -8,6 +8,16 @@ LuxImmo is a data pipeline and web application for exploring Paris real-estate i
 
 The repository also includes geographic reference data and live map layers used by the interface.
 
+## Architecture & Features
+
+- **Frontend**: React + Vite application (port 5173).
+- **Backend (API)**: FastAPI with Uvicorn (port 8000).
+- **Databases**: PostgreSQL (with PostGIS) and MongoDB (Replica Set).
+- **Security**: JWT Authentication (default user `admin` / `admin`).
+- **Rate Limiting**: API endpoints are protected at 200 requests/minute per IP.
+- **ETL Scheduler**: A unified pipeline (`utils/run_pipeline.py`) runs automatically every day at 03:00 AM.
+- **100% Dockerized**: The entire project can be spun up using a single `docker-compose` command.
+
 ## Project structure
 
 - `source/`: raw input files used by the pipeline.
@@ -15,119 +25,91 @@ The repository also includes geographic reference data and live map layers used 
 - `Indicateur_*/silver/`: cleaned parquet outputs.
 - `Indicateur_*/gold/`: final parquet outputs consumed by the app.
 - `geo/`: geographic reference data such as IRIS geometry.
-- `api/`: FastAPI backend.
+- `api/`: FastAPI backend and authentication logic.
 - `frontend/`: React + Vite frontend.
-- `utils/`: scripts that run the pipeline and load data into databases.
+- `utils/`: unified scripts that run the pipeline (`run_pipeline.py`) and load data into databases.
 
 ## Data flow
 
 1. Raw data is transformed by each indicator script in `Indicateur_0` to `Indicateur_4`.
-2. Silver data is produced first, then loaded into PostGIS.
-3. Gold data is produced next, then loaded into MongoDB.
+2. Silver data is produced first, then loaded into PostGIS (`utils/load_to_postgis.py`).
+3. Gold data is produced next, then loaded into MongoDB (`utils/load_golds_to_mongo.py`).
 4. Geographic reference data is also loaded into MongoDB for map and location use.
 
-### Storage targets
+## Configuration (.env)
 
-- Silver layer -> PostGIS
-  - Loader: `utils/load_to_postgis.py`
-  - The loader scans `Indicateur_*/silver/` for parquet files.
-  - Each file is written to a PostGIS table named from the indicator and file name.
-
-- Gold layer -> MongoDB
-  - Loader: `utils/load_golds_to_mongo.py`
-  - The loader scans `Indicateur_*/gold/` for parquet files.
-  - Each file is written to a MongoDB collection.
-
-- Geo layer -> MongoDB
-  - Loader: `utils/load_to_mongodb.py`
-  - This script prepares geographic records and stores them in MongoDB.
-  - It is used for reference/location data such as IRIS geometries.
-
-## Requirements
-
-- Python 3.10+ for the backend and pipeline scripts
-- Node.js 18+ for the frontend
-- PostgreSQL with the PostGIS extension
-- MongoDB Atlas or a MongoDB instance
-
-## Install dependencies
-
-### Python
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r api/requirements.txt
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-```
-
-## Run the pipeline
-
-Run the scripts to download chantiers and trafics first, then the feeder, then the geo helper,  then silver scripts , and finally the gold scripts:
-
-```bash
-python utils/run_all_silvers.py
-python utils/run_all_golds.py
-```
-
-If you want to load data separately:
-
-```bash
-python utils/load_to_postgis.py
-python utils/load_golds_to_mongo.py
-python utils/load_to_mongodb.py
-```
-
-## MongoDB replica set (local)
-
-A local MongoDB replica set is available via Docker Compose for the gold layer:
-
-```bash
-docker compose up -d mongo mongo-init
-```
-
-Then point the loaders at the local node with:
-
-```bash
-copy .env.example .env
-```
-
-and keep the following values:
+Avant de lancer le projet (en Docker ou en local), vous devez créer un fichier `.env` à la racine du projet contenant vos identifiants et variables de configuration :
 
 ```env
+# Configuration MongoDB
 MONGO_HOST=localhost:27017
 MONGO_IS_SRV=false
 MONGO_REPLICA_SET=rs0
+MONGO_USER=
+MONGO_PASSWORD=
+
+# Configuration PostgreSQL
+POSTGRES_HOST=localhost
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+
+# Configuration Authentification API
+API_USER=
+API_PASSWORD=
+JWT_SECRET_KEY=
 ```
 
-If you want to keep using Atlas, set `MONGO_HOST` to your Atlas hostname and `MONGO_IS_SRV=true`.
+> **Note :** Si vous utilisez Docker, les conteneurs utiliseront automatiquement ces variables (avec des redirections réseau gérées en interne par `docker-compose`).
 
-## Launch the backend
+## Quick Start (Docker)
 
-From the project root:
+The project is fully containerized. You do **not** need to install Python, Node.js, Postgres, or MongoDB locally.
+
+1. Clone the repository and navigate to the root directory.
+2. Assurez-vous d'avoir créé le fichier `.env` comme indiqué ci-dessus.
+3. Run the following command:
 
 ```bash
-cd api
-python -m uvicorn main:app --reload
+docker-compose up -d --build
 ```
 
-## Launch the frontend
+This single command will:
+- Start the **MongoDB** replica set.
+- Start the **PostgreSQL** database with PostGIS.
+- Start the **API** on `http://localhost:8000`.
+- Start the **Frontend** on `http://localhost:5173`.
+- Start the **ETL Worker**, which will immediately run the entire data pipeline once, and then schedule itself to run every day at 03:00 AM.
 
+### Accessing the services
+- **Web App**: http://localhost:5173 (Login: `admin` / `admin`)
+- **API Swagger**: http://localhost:8000/docs
+- **ETL Logs**: Run `docker-compose logs -f etl` to watch the data pipeline running.
+
+## Local Development (Without Docker)
+
+If you wish to run components locally for development purposes, you must manually install the dependencies:
+
+### Python Dependencies
+```bash
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r api/requirements.txt
+```
+
+### Frontend Dependencies
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-Then open the local URL shown by Vite, usually `http://localhost:5173`.
+### Running the Pipeline Manually
+```bash
+python utils/run_pipeline.py
+```
 
 ## Notes
 
 - The frontend reads map layers from `frontend/public/data/`.
 - The API reads gold parquet files directly from the indicator folders.
-- The batch jobs in `api/batch.py` refresh live GeoJSON files for construction and traffic layers.
+- The batch jobs in `api/batch.py` refresh live GeoJSON files for construction and traffic layers in the background.

@@ -42,6 +42,64 @@ services:
     entrypoint: >
       bash -c "mongosh --host mongo --port 27017 --eval 'try { var status = rs.status(); if (!status.members.some(function(m){ return m.name === \"mongo-secondary:27017\"; })) { rs.add(\"mongo-secondary:27017\"); } } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}, {_id: 1, host: \"mongo-secondary:27017\"}]}); }'"
 
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: luximmo-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  api:
+    build: ./api
+    container_name: luximmo-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - MONGO_HOST=mongo
+    depends_on:
+      - mongo-init
+      - postgres
+      
+  etl:
+    build: ./api
+    container_name: luximmo-etl
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - MONGO_HOST=mongo
+    depends_on:
+      - mongo-init
+      - postgres
+    command: ["python", "-u", "/app/utils/run_pipeline.py"]
+      
+  frontend:
+    build: ./frontend
+    container_name: luximmo-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - api
+
 volumes:
   mongo-data:
   mongo-secondary-data:
+  postgres-data:

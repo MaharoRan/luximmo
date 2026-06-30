@@ -6,3 +6,9 @@ PyJWT
 bcrypt
 python-multipart
 slowapi
+schedule
+pymongo
+shapely
+geopandas
+SQLAlchemy
+psycopg2-binary
