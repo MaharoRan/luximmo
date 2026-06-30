@@ -5,3 +5,4 @@ Indicateur_*/silver/
 Indicateur_*/gold/
 .env
 __pycache__/
+frontend/public/data

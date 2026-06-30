@@ -84,6 +84,30 @@ python utils/load_golds_to_mongo.py
 python utils/load_to_mongodb.py
 ```
 
+## MongoDB replica set (local)
+
+A local MongoDB replica set is available via Docker Compose for the gold layer:
+
+```bash
+docker compose up -d mongo mongo-init
+```
+
+Then point the loaders at the local node with:
+
+```bash
+copy .env.example .env
+```
+
+and keep the following values:
+
+```env
+MONGO_HOST=localhost:27017
+MONGO_IS_SRV=false
+MONGO_REPLICA_SET=rs0
+```
+
+If you want to keep using Atlas, set `MONGO_HOST` to your Atlas hostname and `MONGO_IS_SRV=true`.
+
 ## Launch the backend
 
 From the project root:
