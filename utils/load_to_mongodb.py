@@ -35,19 +35,27 @@ _load_env_file(ENV_PATH)
 
 
 def _get_mongo_credentials():
-    user = os.getenv("MONGO_USER")
-    password = os.getenv("MONGO_PASSWORD")
-
-    if not user or not password:
-        raise RuntimeError(
-            "Variables MongoDB manquantes. Vérifie le fichier .env ou les variables d'environnement MONGO_USER et MONGO_PASSWORD."
-        )
+    user = os.getenv("MONGO_USER") or "maharo"
+    password = os.getenv("MONGO_PASSWORD") or "301091"
 
     return user, password
 
 
-def _build_mongo_uri(host, user, password):
-    return f"mongodb+srv://{quote_plus(user)}:{quote_plus(password)}@{host}/?retryWrites=true&w=majority"
+def _build_mongo_uri(host, user, password, is_srv=True, replica_set=None):
+    query_parts = ["retryWrites=true", "w=majority"]
+    if replica_set:
+        query_parts.append(f"replicaSet={replica_set}")
+
+    if user and password:
+        if is_srv:
+            return f"mongodb+srv://{quote_plus(user)}:{quote_plus(password)}@{host}/?{'&'.join(query_parts)}"
+
+        return f"mongodb://{quote_plus(user)}:{quote_plus(password)}@{host}/?{'&'.join(query_parts)}"
+
+    if is_srv:
+        return f"mongodb+srv://{host}/?{'&'.join(query_parts)}"
+
+    return f"mongodb://{host}/?{'&'.join(query_parts)}"
 
 
 def _resolve_input_path(input_path):
@@ -124,12 +132,18 @@ def load_to_mongodb(input_path, mongo_uri, database, collection):
 if __name__ == "__main__":
     mongo_user, mongo_password = _get_mongo_credentials()
 
+    mongo_host = os.getenv("MONGO_HOST") or "cluster0.3bidwmj.mongodb.net"
+    mongo_is_srv = os.getenv("MONGO_IS_SRV", "true").lower() == "true"
+    mongo_replica_set = os.getenv("MONGO_REPLICA_SET", "rs0")
+
     load_to_mongodb(
         "../geo/iris.parquet",
         _build_mongo_uri(
-            "cluster0.3bidwmj.mongodb.net",
+            mongo_host,
             mongo_user,
             mongo_password,
+            is_srv=mongo_is_srv,
+            replica_set=mongo_replica_set if not mongo_is_srv else None,
         ),
         "dataarchi",
         "location"

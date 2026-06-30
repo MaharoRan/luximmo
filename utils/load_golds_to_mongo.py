@@ -39,9 +39,17 @@ def load_parquet_to_mongodb(file_path, database, collection, mongo_uri):
 def load_all_golds(database_name="dataarchi"):
     """Finds all gold parquet files and loads them into MongoDB."""
     mongo_user, mongo_password = _get_mongo_credentials()
-    mongo_host = "cluster0.3bidwmj.mongodb.net" # From load_to_mongodb.py template
-    
-    mongo_uri = _build_mongo_uri(mongo_host, mongo_user, mongo_password)
+    mongo_host = os.getenv("MONGO_HOST") or "cluster0.3bidwmj.mongodb.net"
+    mongo_is_srv = os.getenv("MONGO_IS_SRV", "true").lower() == "true"
+    mongo_replica_set = os.getenv("MONGO_REPLICA_SET", "rs0")
+
+    mongo_uri = _build_mongo_uri(
+        mongo_host,
+        mongo_user,
+        mongo_password,
+        is_srv=mongo_is_srv,
+        replica_set=mongo_replica_set if not mongo_is_srv else None,
+    )
     
     gold_files = list(REPO_ROOT.glob("Indicateur_*/gold/*.parquet"))
     

@@ -1,0 +1,47 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: luximmo-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  mongo-secondary:
+    image: mongo:7.0
+    container_name: luximmo-mongo-secondary
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-secondary-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  mongo-init:
+    image: mongo:7.0
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-secondary:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      bash -c "mongosh --host mongo --port 27017 --eval 'try { var status = rs.status(); if (!status.members.some(function(m){ return m.name === \"mongo-secondary:27017\"; })) { rs.add(\"mongo-secondary:27017\"); } } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}, {_id: 1, host: \"mongo-secondary:27017\"}]}); }'"
+
+volumes:
+  mongo-data:
+  mongo-secondary-data:
